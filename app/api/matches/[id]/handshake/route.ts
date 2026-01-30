@@ -56,13 +56,15 @@ export async function POST(
     console.log('Will update field:', updateField);
 
     // Step 3: Update the handshake field
-    const { data: updateData, error: updateError, count } = await supabase
+    const { data: updateData, error: updateError } = await supabase
       .from('matches')
       .update({ [updateField]: true })
       .eq('id', matchId)
       .select();
 
-    console.log('Update result:', { updateData, updateError, count });
+    console.log('Update result:', { updateData, updateError });
+    
+    if (updateError) {
       console.error('Handshake update error:', updateError);
       throw updateError;
     }
