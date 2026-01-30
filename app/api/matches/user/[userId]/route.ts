@@ -9,6 +9,8 @@ export async function GET(
     const supabase = createServerClient();
     const userId = params.userId;
 
+    console.log('Fetching matches for userId:', userId);
+
     // Get matches where user is either user_a or user_b
     const { data: matches, error } = await supabase
       .from('matches')
@@ -27,7 +29,12 @@ export async function GET(
       .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
       .order('round_number', { ascending: true });
 
-    if (error) throw error;
+    console.log('Matches query result:', matches?.length, 'error:', error);
+
+    if (error) {
+      console.error('Supabase error:', error);
+      throw error;
+    }
 
     // Transform matches to include partner info
     const transformedMatches = (matches || []).map(match => {
@@ -45,7 +52,7 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({ matches: transformedMatches });
+    return NextResponse.json({ matches: transformedMatches, userId, rawCount: matches?.length || 0 });
   } catch (error: any) {
     console.error('Matches fetch error:', error);
     return NextResponse.json(
