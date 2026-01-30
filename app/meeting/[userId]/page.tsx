@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { 
   QrCode, Clock, User, Building, Target, MessageCircle,
-  ArrowLeft, RefreshCw, Loader2, CheckCircle, Scan, Play
+  ArrowLeft, RefreshCw, Loader2, CheckCircle, Scan, Play, Lightbulb, Sparkles
 } from 'lucide-react';
 
 interface Match {
