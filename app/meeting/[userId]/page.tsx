@@ -282,6 +282,31 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
               </CardContent>
             </Card>
 
+            {/* Icebreaker Question */}
+            {currentMatch.icebreaker_question && (
+              <Card className="mb-6 bg-gradient-to-r from-amber-50 to-yellow-50 border-2 border-amber-200">
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                      <Lightbulb className="w-6 h-6 text-amber-600" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="w-4 h-4 text-amber-500" />
+                        <span className="text-sm font-semibold text-amber-700">Buz Kırıcı Soru</span>
+                      </div>
+                      <p className="text-lg font-medium text-gray-800">
+                        {currentMatch.icebreaker_question}
+                      </p>
+                      <p className="text-xs text-amber-600 mt-2">
+                        💡 Bu soru yapay zeka tarafından sizin için özel olarak oluşturuldu
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* QR Handshake */}
             <Card className="mb-6 border-2 border-blue-200">
               <CardContent className="pt-6">
