@@ -9,54 +9,69 @@ export async function GET(
     const supabase = createServerClient();
     const userId = params.userId;
 
-    console.log('Fetching matches for userId:', userId);
-
-    // First, let's try to get all matches and filter manually
-    const { data: allMatches, error: allError } = await supabase
+    // Query matches directly without complex joins first
+    const { data: rawMatches, error: rawError } = await supabase
       .from('matches')
-      .select(`
-        *,
-        user_a:user_a_id (
-          id, full_name, company, position, current_intent
-        ),
-        user_b:user_b_id (
-          id, full_name, company, position, current_intent
-        ),
-        event:event_id (
-          id, name, theme, round_duration_sec
-        )
-      `)
+      .select('*')
+      .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
       .order('round_number', { ascending: true });
 
-    console.log('All matches count:', allMatches?.length);
-    
-    if (allError) {
-      console.error('Supabase error:', allError);
-      throw allError;
+    if (rawError) {
+      console.error('Raw matches error:', rawError);
     }
 
-    // Filter matches where user is either user_a or user_b
-    const matches = (allMatches || []).filter(match => 
-      match.user_a_id === userId || match.user_b_id === userId
-    );
+    // If direct query fails, get all and filter
+    let matchesData = rawMatches;
+    if (!matchesData || matchesData.length === 0) {
+      const { data: allMatches } = await supabase
+        .from('matches')
+        .select('*')
+        .order('round_number', { ascending: true });
+      
+      matchesData = (allMatches || []).filter(match => 
+        match.user_a_id === userId || match.user_b_id === userId
+      );
+    }
 
-    console.log('Filtered matches count:', matches.length);
+    // Now get the related data for each match
+    const transformedMatches = await Promise.all((matchesData || []).map(async (match) => {
+      // Get user_a
+      const { data: userA } = await supabase
+        .from('users')
+        .select('id, full_name, company, position, current_intent')
+        .eq('id', match.user_a_id)
+        .single();
 
-    // Transform matches to include partner info
-    const transformedMatches = matches.map(match => {
+      // Get user_b
+      const { data: userB } = await supabase
+        .from('users')
+        .select('id, full_name, company, position, current_intent')
+        .eq('id', match.user_b_id)
+        .single();
+
+      // Get event
+      const { data: event } = await supabase
+        .from('events')
+        .select('id, name, theme, round_duration_sec')
+        .eq('id', match.event_id)
+        .single();
+
       const isUserA = match.user_a_id === userId;
-      const partner = isUserA ? match.user_b : match.user_a;
+      const partner = isUserA ? userB : userA;
       const myHandshake = isUserA ? match.handshake_a : match.handshake_b;
       const partnerHandshake = isUserA ? match.handshake_b : match.handshake_a;
 
       return {
         ...match,
+        user_a: userA,
+        user_b: userB,
+        event,
         partner,
         myHandshake,
         partnerHandshake,
         isUserA
       };
-    });
+    }));
 
     return NextResponse.json({ matches: transformedMatches });
   } catch (error: any) {
