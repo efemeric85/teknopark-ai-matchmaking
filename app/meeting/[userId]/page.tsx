@@ -355,35 +355,35 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
             <Card className="mb-6 border-2 border-blue-200">
               <CardContent className="pt-6">
                 <div className="text-center">
-                  <div className="text-lg font-medium mb-4">QR Handshake</div>
+                  <div className="text-lg font-medium mb-2">QR Handshake</div>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Karşınızdaki kişi bu QR kodu taratarak tanışmayı onaylasın
+                  </p>
                   
-                  {/* Large QR Code Display */}
-                  <div className="flex justify-center mb-6">
-                    <div className={`w-52 h-52 rounded-2xl flex items-center justify-center ${
-                      currentMatch.myHandshake ? 'bg-green-100 border-4 border-green-300' : 'bg-gray-100 border-4 border-gray-200'
-                    }`}>
-                      {currentMatch.myHandshake ? (
+                  {/* Real QR Code Display */}
+                  <div className="flex justify-center mb-4">
+                    {currentMatch.myHandshake ? (
+                      <div className="w-52 h-52 rounded-2xl flex items-center justify-center bg-green-100 border-4 border-green-300">
                         <CheckCircle className="text-green-500" style={{ width: 96, height: 96 }} />
-                      ) : (
-                        <QrCode className="text-gray-400" style={{ width: 128, height: 128 }} />
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-white rounded-2xl border-4 border-blue-200 shadow-lg">
+                        <QRCodeCanvas 
+                          matchId={currentMatch.id} 
+                          oderId={currentMatch.partner.id} 
+                        />
+                      </div>
+                    )}
                   </div>
+
+                  {!currentMatch.myHandshake && (
+                    <p className="text-xs text-blue-600 mb-4">
+                      📱 {currentMatch.partner.full_name} bu kodu telefonuyla taratsın
+                    </p>
+                  )}
 
                   {/* Status Indicators */}
                   <div className="flex justify-center gap-8 mb-6">
-                    <div className="text-center">
-                      <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 ${
-                        currentMatch.myHandshake ? 'bg-green-100' : 'bg-gray-100'
-                      }`}>
-                        {currentMatch.myHandshake ? (
-                          <CheckCircle className="w-7 h-7 text-green-600" />
-                        ) : (
-                          <QrCode className="w-7 h-7 text-gray-400" />
-                        )}
-                      </div>
-                      <div className="text-sm font-medium text-gray-600">Siz</div>
-                    </div>
                     <div className="text-center">
                       <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 ${
                         currentMatch.partnerHandshake ? 'bg-green-100' : 'bg-gray-100'
@@ -395,29 +395,46 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
                         )}
                       </div>
                       <div className="text-sm font-medium text-gray-600">{currentMatch.partner.full_name.split(' ')[0]}</div>
+                      <div className="text-xs text-gray-400">
+                        {currentMatch.partnerHandshake ? 'Taradı ✓' : 'Bekliyor'}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 ${
+                        currentMatch.myHandshake ? 'bg-green-100' : 'bg-gray-100'
+                      }`}>
+                        {currentMatch.myHandshake ? (
+                          <CheckCircle className="w-7 h-7 text-green-600" />
+                        ) : (
+                          <QrCode className="w-7 h-7 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="text-sm font-medium text-gray-600">Siz</div>
+                      <div className="text-xs text-gray-400">
+                        {currentMatch.myHandshake ? 'Taradınız ✓' : 'Bekliyor'}
+                      </div>
                     </div>
                   </div>
 
-                  {!currentMatch.myHandshake ? (
-                    <Button 
-                      size="lg" 
-                      className="w-full h-14 text-lg"
-                      onClick={startQRScanner}
-                      disabled={scanning}
-                    >
-                      {scanning ? (
-                        <>
-                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                          Taranıyor...
-                        </>
-                      ) : (
-                        <>
-                          <Scan className="w-5 h-5 mr-2" />
-                          QR Kod Tarat
-                        </>
-                      )}
-                    </Button>
-                  ) : (
+                  {/* Both Ready Status */}
+                  {currentMatch.myHandshake && currentMatch.partnerHandshake ? (
+                    <div className="bg-green-100 rounded-lg p-4 mb-4">
+                      <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                      <p className="text-green-700 font-medium">
+                        Her iki taraf da hazır! Görüşme başlıyor...
+                      </p>
+                    </div>
+                  ) : currentMatch.myHandshake ? (
+                    <div className="bg-amber-50 rounded-lg p-4 mb-4">
+                      <Loader2 className="w-6 h-6 text-amber-600 mx-auto mb-2 animate-spin" />
+                      <p className="text-amber-700">
+                        {currentMatch.partner.full_name}'in QR kodunuzu taraması bekleniyor...
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
                     <div className="text-center">
                       <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-2" />
                       <p className="text-gray-600 font-medium">
