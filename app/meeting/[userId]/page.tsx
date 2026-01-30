@@ -435,18 +435,6 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
                 </div>
               </CardContent>
             </Card>
-                    <div className="text-center">
-                      <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-2" />
-                      <p className="text-gray-600 font-medium">
-                        {currentMatch.partnerHandshake 
-                          ? "Her iki taraf hazır! Görüşme başlıyor..." 
-                          : "Karşı tarafın taraması bekleniyor..."}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
 
             {/* Manual Start (for demo) */}
             {currentMatch.myHandshake && currentMatch.partnerHandshake && (
