@@ -19,7 +19,7 @@ export async function POST(
 
     const supabase = createServerClient();
 
-    // Get the match
+    // Step 1: Get current match state
     const { data: match, error: matchError } = await supabase
       .from('matches')
       .select('*')
@@ -33,9 +33,9 @@ export async function POST(
       );
     }
 
-    // Determine which handshake to update
-    const isUserA = match.user_a_id === user_id;
-    const isUserB = match.user_b_id === user_id;
+    // Step 2: Determine which side is doing handshake
+    const isUserA = user_id === match.user_a_id;
+    const isUserB = user_id === match.user_b_id;
 
     if (!isUserA && !isUserB) {
       return NextResponse.json(
@@ -45,36 +45,74 @@ export async function POST(
     }
 
     const updateField = isUserA ? 'handshake_a' : 'handshake_b';
-    const otherHandshake = isUserA ? match.handshake_b : match.handshake_a;
 
-    console.log('Handshake attempt:', { matchId, user_id, isUserA, isUserB, updateField, otherHandshake });
+    // Step 3: Update the handshake field
+    const { error: updateError } = await supabase
+      .from('matches')
+      .update({ [updateField]: true })
+      .eq('id', matchId);
 
-    // Update handshake
-    const updateData: any = { [updateField]: true };
-    
-    // If both have shaken hands, start the timer
-    if (otherHandshake) {
-      updateData.status = 'active';
-      updateData.started_at = new Date().toISOString();
+    if (updateError) {
+      console.error('Handshake update error:', updateError);
+      throw updateError;
     }
 
-    console.log('Update data:', updateData);
-
-    const { data: updatedMatch, error: updateError } = await supabase
+    // Step 4: Re-fetch to check if BOTH are now true
+    const { data: updatedMatch, error: refetchError } = await supabase
       .from('matches')
-      .update(updateData)
+      .select('*')
       .eq('id', matchId)
-      .select()
       .single();
 
-    console.log('Update result:', { updatedMatch, updateError });
+    if (refetchError || !updatedMatch) {
+      throw refetchError || new Error('Match refetch failed');
+    }
 
-    if (updateError) throw updateError;
+    // Step 5: ONLY set started_at and status='active' when BOTH handshakes are TRUE
+    let finalMatch = updatedMatch;
+    let bothReady = false;
+
+    if (updatedMatch.handshake_a === true && 
+        updatedMatch.handshake_b === true && 
+        updatedMatch.status === 'pending') {
+      
+      const startedAt = new Date().toISOString();
+      
+      const { error: activateError } = await supabase
+        .from('matches')
+        .update({
+          status: 'active',
+          started_at: startedAt
+        })
+        .eq('id', matchId);
+
+      if (activateError) {
+        console.error('Match activation error:', activateError);
+        throw activateError;
+      }
+
+      // Fetch final state
+      const { data: activatedMatch } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('id', matchId)
+        .single();
+
+      if (activatedMatch) {
+        finalMatch = activatedMatch;
+      }
+      
+      bothReady = true;
+    }
 
     return NextResponse.json({ 
       success: true, 
-      match: updatedMatch,
-      bothReady: otherHandshake === true
+      match: finalMatch,
+      bothReady,
+      handshake_a: finalMatch.handshake_a,
+      handshake_b: finalMatch.handshake_b,
+      status: finalMatch.status,
+      started_at: finalMatch.started_at
     });
   } catch (error: any) {
     console.error('Handshake error:', error);
