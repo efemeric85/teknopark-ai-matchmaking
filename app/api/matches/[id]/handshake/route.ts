@@ -44,6 +44,9 @@ export async function POST(
       );
     }
 
+    const updateField = isUserA ? 'handshake_a' : 'handshake_b';
+    const otherHandshake = isUserA ? match.handshake_b : match.handshake_a;
+
     console.log('Handshake attempt:', { matchId, user_id, isUserA, isUserB, updateField, otherHandshake });
 
     // Update handshake
