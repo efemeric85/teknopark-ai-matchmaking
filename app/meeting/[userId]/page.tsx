@@ -94,8 +94,11 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
       const data = await res.json();
       if (data.matches) {
         setMatches(data.matches);
-        // Find current active or pending match
-        const activeMatch = data.matches.find((m: Match) => 
+        // Find current active or pending match - prefer highest round number
+        const sortedMatches = [...data.matches].sort((a: Match, b: Match) => 
+          b.round_number - a.round_number
+        );
+        const activeMatch = sortedMatches.find((m: Match) => 
           m.status === 'active' || m.status === 'pending'
         );
         if (activeMatch) {
