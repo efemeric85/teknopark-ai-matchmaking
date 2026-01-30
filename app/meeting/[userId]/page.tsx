@@ -313,57 +313,70 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
                 <div className="text-center">
                   <div className="text-lg font-medium mb-4">QR Handshake</div>
                   
+                  {/* Large QR Code Display */}
+                  <div className="flex justify-center mb-6">
+                    <div className={`w-[200px] h-[200px] rounded-2xl flex items-center justify-center ${
+                      currentMatch.myHandshake ? 'bg-green-100 border-4 border-green-300' : 'bg-gray-100 border-4 border-gray-200'
+                    }`}>
+                      {currentMatch.myHandshake ? (
+                        <CheckCircle className="w-24 h-24 text-green-500" />
+                      ) : (
+                        <QrCode className="w-32 h-32 text-gray-400" />
+                      )}
+                    </div>
+                  </div>
+
                   {/* Status Indicators */}
                   <div className="flex justify-center gap-8 mb-6">
                     <div className="text-center">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 ${
                         currentMatch.myHandshake ? 'bg-green-100' : 'bg-gray-100'
                       }`}>
                         {currentMatch.myHandshake ? (
-                          <CheckCircle className="w-6 h-6 text-green-600" />
+                          <CheckCircle className="w-7 h-7 text-green-600" />
                         ) : (
-                          <QrCode className="w-6 h-6 text-gray-400" />
+                          <QrCode className="w-7 h-7 text-gray-400" />
                         )}
                       </div>
-                      <div className="text-sm text-gray-600">Siz</div>
+                      <div className="text-sm font-medium text-gray-600">Siz</div>
                     </div>
                     <div className="text-center">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 ${
                         currentMatch.partnerHandshake ? 'bg-green-100' : 'bg-gray-100'
                       }`}>
                         {currentMatch.partnerHandshake ? (
-                          <CheckCircle className="w-6 h-6 text-green-600" />
+                          <CheckCircle className="w-7 h-7 text-green-600" />
                         ) : (
-                          <QrCode className="w-6 h-6 text-gray-400" />
+                          <QrCode className="w-7 h-7 text-gray-400" />
                         )}
                       </div>
-                      <div className="text-sm text-gray-600">{currentMatch.partner.full_name.split(' ')[0]}</div>
+                      <div className="text-sm font-medium text-gray-600">{currentMatch.partner.full_name.split(' ')[0]}</div>
                     </div>
                   </div>
 
                   {!currentMatch.myHandshake ? (
                     <Button 
                       size="lg" 
-                      className="w-full"
+                      className="w-full h-14 text-lg"
                       onClick={startQRScanner}
                       disabled={scanning}
                     >
                       {scanning ? (
                         <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                           Taranıyor...
                         </>
                       ) : (
                         <>
-                          <Scan className="w-4 h-4 mr-2" />
+                          <Scan className="w-5 h-5 mr-2" />
                           QR Kod Tarat
                         </>
                       )}
                     </Button>
                   ) : (
                     <div className="text-center">
-                      <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                      <p className="text-gray-600">
+                      <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-2" />
+                      <p className="text-gray-600 font-medium">
                         {currentMatch.partnerHandshake 
                           ? "Her iki taraf hazır! Görüşme başlıyor..." 
                           : "Karşı tarafın taraması bekleniyor..."}
