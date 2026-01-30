@@ -9,14 +9,20 @@ export async function POST(
     const supabase = createServerClient();
     const matchId = params.id;
 
-    const { data: updatedMatch, error } = await supabase
+    // Update status to completed
+    const { error } = await supabase
       .from('matches')
       .update({ status: 'completed' })
-      .eq('id', matchId)
-      .select()
-      .single();
+      .eq('id', matchId);
 
     if (error) throw error;
+
+    // Fetch updated match
+    const { data: updatedMatch } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .single();
 
     return NextResponse.json({ success: true, match: updatedMatch });
   } catch (error: any) {
