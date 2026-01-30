@@ -37,6 +37,14 @@ export async function POST(
     const isUserA = user_id === match.user_a_id;
     const isUserB = user_id === match.user_b_id;
 
+    console.log('Handshake check:', { 
+      user_id, 
+      user_a_id: match.user_a_id, 
+      user_b_id: match.user_b_id,
+      isUserA, 
+      isUserB 
+    });
+
     if (!isUserA && !isUserB) {
       return NextResponse.json(
         { error: 'Bu eşleşmede yetkisiz kullanıcı' },
@@ -45,14 +53,16 @@ export async function POST(
     }
 
     const updateField = isUserA ? 'handshake_a' : 'handshake_b';
+    console.log('Will update field:', updateField);
 
     // Step 3: Update the handshake field
-    const { error: updateError } = await supabase
+    const { data: updateData, error: updateError, count } = await supabase
       .from('matches')
       .update({ [updateField]: true })
-      .eq('id', matchId);
+      .eq('id', matchId)
+      .select();
 
-    if (updateError) {
+    console.log('Update result:', { updateData, updateError, count });
       console.error('Handshake update error:', updateError);
       throw updateError;
     }
