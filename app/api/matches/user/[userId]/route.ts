@@ -11,8 +11,8 @@ export async function GET(
 
     console.log('Fetching matches for userId:', userId);
 
-    // Get matches where user is either user_a or user_b
-    const { data: matches, error } = await supabase
+    // First, let's try to get all matches and filter manually
+    const { data: allMatches, error: allError } = await supabase
       .from('matches')
       .select(`
         *,
@@ -26,18 +26,24 @@ export async function GET(
           id, name, theme, round_duration_sec
         )
       `)
-      .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
       .order('round_number', { ascending: true });
 
-    console.log('Matches query result:', matches?.length, 'error:', error);
-
-    if (error) {
-      console.error('Supabase error:', error);
-      throw error;
+    console.log('All matches count:', allMatches?.length);
+    
+    if (allError) {
+      console.error('Supabase error:', allError);
+      throw allError;
     }
 
+    // Filter matches where user is either user_a or user_b
+    const matches = (allMatches || []).filter(match => 
+      match.user_a_id === userId || match.user_b_id === userId
+    );
+
+    console.log('Filtered matches count:', matches.length);
+
     // Transform matches to include partner info
-    const transformedMatches = (matches || []).map(match => {
+    const transformedMatches = matches.map(match => {
       const isUserA = match.user_a_id === userId;
       const partner = isUserA ? match.user_b : match.user_a;
       const myHandshake = isUserA ? match.handshake_a : match.handshake_b;
@@ -52,7 +58,7 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({ matches: transformedMatches, userId, rawCount: matches?.length || 0 });
+    return NextResponse.json({ matches: transformedMatches });
   } catch (error: any) {
     console.error('Matches fetch error:', error);
     return NextResponse.json(
