@@ -8,11 +8,15 @@ export async function GET(
   try {
     const supabase = createServerClient();
     
+    console.log('GET Match API - looking for:', params.id);
+    
     const { data: match, error } = await supabase
       .from('matches')
       .select('*')
       .eq('id', params.id)
-      .single();
+      .maybeSingle();
+
+    console.log('GET Match API result:', { found: !!match, error: error?.message });
 
     if (error) throw error;
 
