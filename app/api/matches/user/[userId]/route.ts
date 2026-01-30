@@ -43,10 +43,6 @@ export async function GET(
         }
       }
     }
-    );
-
-    console.log('Filtered matches for user:', matchesData.length);
-    console.log('Filtered match IDs:', matchesData.map(m => m.id.slice(0,8)));
 
     // Now get the related data for each match
     const transformedMatches = await Promise.all(matchesData.map(async (match) => {
