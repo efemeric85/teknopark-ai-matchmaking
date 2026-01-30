@@ -9,6 +9,7 @@ import {
   QrCode, Clock, User, Building, Target, MessageCircle,
   ArrowLeft, RefreshCw, Loader2, CheckCircle, Scan, Play, Lightbulb, Sparkles
 } from 'lucide-react';
+import QRCode from 'qrcode';
 
 interface Match {
   id: string;
@@ -31,6 +32,49 @@ interface Match {
     name: string;
     round_duration_sec: number;
   };
+}
+
+// QR Code Component
+function QRCodeCanvas({ matchId, oderId }: { matchId: string; oderId: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (canvasRef.current && matchId && oderId) {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      const handshakeUrl = `${baseUrl}/handshake/${matchId}/${oderId}`;
+      
+      QRCode.toCanvas(canvasRef.current, handshakeUrl, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      }, (err) => {
+        if (err) {
+          console.error('QR Code generation error:', err);
+          setError(true);
+        }
+      });
+    }
+  }, [matchId, oderId]);
+
+  if (error) {
+    return (
+      <div className="w-[200px] h-[200px] bg-gray-100 rounded-lg flex items-center justify-center">
+        <QrCode className="w-16 h-16 text-gray-400" />
+      </div>
+    );
+  }
+
+  return (
+    <canvas 
+      ref={canvasRef} 
+      className="rounded-lg shadow-md"
+      style={{ width: 200, height: 200 }}
+    />
+  );
 }
 
 export default function MeetingPage({ params }: { params: { userId: string } }) {
