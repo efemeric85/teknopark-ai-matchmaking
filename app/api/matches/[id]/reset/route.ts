@@ -10,6 +10,8 @@ export async function POST(
     const supabase = createServerClient();
     const matchId = params.id;
 
+    console.log('Resetting match:', matchId);
+
     const { error } = await supabase
       .from('matches')
       .update({ 
@@ -20,14 +22,21 @@ export async function POST(
       })
       .eq('id', matchId);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Update error:', error);
+      throw error;
+    }
 
     // Fetch updated match
-    const { data: updatedMatch } = await supabase
+    const { data: updatedMatch, error: fetchError } = await supabase
       .from('matches')
       .select('*')
       .eq('id', matchId)
-      .single();
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('Fetch error:', fetchError);
+    }
 
     return NextResponse.json({ success: true, match: updatedMatch });
   } catch (error: any) {
