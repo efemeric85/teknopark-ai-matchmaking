@@ -9,16 +9,11 @@ export async function GET(
     const supabase = createServerClient();
     const userId = params.userId;
 
-    console.log('Fetching matches for userId:', userId);
-
     // Get all matches and filter
     const { data: allMatches, error: allError } = await supabase
       .from('matches')
       .select('*')
-      .order('round_number', { ascending: true });
-
-    console.log('All matches in DB:', allMatches?.length);
-    console.log('Match IDs:', allMatches?.map(m => ({ id: m.id.slice(0,8), round: m.round_number, ua: m.user_a_id.slice(0,8), ub: m.user_b_id.slice(0,8) })));
+      .order('created_at', { ascending: false }); // Order by most recent first
     
     if (allError) {
       console.error('Supabase error:', allError);
@@ -28,6 +23,26 @@ export async function GET(
     // Filter matches where user is either user_a or user_b
     const matchesData = (allMatches || []).filter(match => 
       match.user_a_id === userId || match.user_b_id === userId
+    );
+
+    // Auto-complete expired matches
+    const now = Date.now();
+    for (const match of matchesData) {
+      if (match.status === 'active' && match.started_at) {
+        const startedAt = new Date(match.started_at).getTime();
+        const elapsed = Math.floor((now - startedAt) / 1000);
+        const duration = 360; // 6 minutes
+        
+        if (elapsed > duration) {
+          // Mark as completed
+          await supabase
+            .from('matches')
+            .update({ status: 'completed' })
+            .eq('id', match.id);
+          match.status = 'completed';
+        }
+      }
+    }
     );
 
     console.log('Filtered matches for user:', matchesData.length);
