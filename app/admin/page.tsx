@@ -147,13 +147,13 @@ export default function AdminPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'draft':
-        return <Badge variant="secondary">Taslak</Badge>;
+        return <Badge className="bg-gray-500" variant="secondary">Taslak</Badge>;
       case 'active':
-        return <Badge className="bg-green-500">Aktif</Badge>;
+        return <Badge className="bg-green-500" variant="default">Aktif</Badge>;
       case 'completed':
-        return <Badge variant="outline">Tamamlandı</Badge>;
+        return <Badge className="bg-slate-400" variant="outline">Tamamlandı</Badge>;
       default:
-        return <Badge>{status}</Badge>;
+        return <Badge className="bg-blue-500" variant="default">{status}</Badge>;
     }
   };
 
@@ -291,7 +291,7 @@ export default function AdminPage() {
                           "{p.current_intent}"
                         </div>
                       </div>
-                      <Badge variant="outline" className="bg-green-50">
+                      <Badge className="bg-green-50" variant="outline">
                         <CheckCircle className="w-3 h-3 mr-1" />
                         Kayıtlı
                       </Badge>
