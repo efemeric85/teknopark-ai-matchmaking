@@ -19,6 +19,8 @@ export async function POST(
 
     const supabase = createServerClient();
 
+    console.log('Handshake API called:', { matchId, user_id });
+
     // Step 1: Get current match state
     const { data: match, error: matchError } = await supabase
       .from('matches')
@@ -26,9 +28,12 @@ export async function POST(
       .eq('id', matchId)
       .single();
 
+    console.log('Match lookup result:', { match: match?.id, error: matchError?.message });
+
     if (matchError || !match) {
+      console.error('Match not found:', { matchId, error: matchError });
       return NextResponse.json(
-        { error: 'Eşleşme bulunamadı' },
+        { error: `Eşleşme bulunamadı (ID: ${matchId?.slice(0,8)}...)`, matchId, matchError: matchError?.message },
         { status: 404 }
       );
     }
