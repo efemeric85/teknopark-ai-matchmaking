@@ -26,14 +26,22 @@ export async function POST(
       .from('matches')
       .select('*')
       .eq('id', matchId)
-      .single();
+      .maybeSingle();
 
-    console.log('Match lookup result:', { match: match?.id, error: matchError?.message });
+    console.log('Match lookup result:', { matchFound: !!match, matchId: match?.id, error: matchError?.message });
 
-    if (matchError || !match) {
-      console.error('Match not found:', { matchId, error: matchError });
+    if (matchError) {
+      console.error('Match query error:', matchError);
       return NextResponse.json(
-        { error: `Eşleşme bulunamadı (ID: ${matchId?.slice(0,8)}...)`, matchId, matchError: matchError?.message },
+        { error: `Veritabanı hatası: ${matchError.message}`, matchId },
+        { status: 500 }
+      );
+    }
+
+    if (!match) {
+      console.error('Match not found:', { matchId });
+      return NextResponse.json(
+        { error: `Eşleşme bulunamadı (ID: ${matchId?.slice(0,8)}...)`, matchId },
         { status: 404 }
       );
     }
