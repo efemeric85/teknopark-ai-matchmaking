@@ -315,13 +315,13 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
                   
                   {/* Large QR Code Display */}
                   <div className="flex justify-center mb-6">
-                    <div className={`w-[200px] h-[200px] rounded-2xl flex items-center justify-center ${
+                    <div className={`w-52 h-52 rounded-2xl flex items-center justify-center ${
                       currentMatch.myHandshake ? 'bg-green-100 border-4 border-green-300' : 'bg-gray-100 border-4 border-gray-200'
                     }`}>
                       {currentMatch.myHandshake ? (
-                        <CheckCircle className="w-24 h-24 text-green-500" />
+                        <CheckCircle className="text-green-500" style={{ width: 96, height: 96 }} />
                       ) : (
-                        <QrCode className="w-32 h-32 text-gray-400" />
+                        <QrCode className="text-gray-400" style={{ width: 128, height: 128 }} />
                       )}
                     </div>
                   </div>
