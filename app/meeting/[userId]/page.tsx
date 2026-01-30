@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { 
   QrCode, Clock, User, Building, Target, MessageCircle,
-  ArrowLeft, RefreshCw, Loader2, CheckCircle, Scan, Play, Lightbulb, Sparkles
+  ArrowLeft, RefreshCw, Loader2, CheckCircle, Play, Lightbulb, Sparkles
 } from 'lucide-react';
 import QRCode from 'qrcode';
 
@@ -16,9 +16,9 @@ interface Match {
   round_number: number;
   table_number: number;
   icebreaker_question: string;
-  status: string;
-  myHandshake: boolean;
-  partnerHandshake: boolean;
+  status: 'pending' | 'active' | 'completed';
+  handshake_a: boolean;
+  handshake_b: boolean;
   started_at: string | null;
   partner: {
     id: string;
@@ -32,6 +32,9 @@ interface Match {
     name: string;
     round_duration_sec: number;
   };
+  myHandshake: boolean;
+  partnerHandshake: boolean;
+  isUserA: boolean;
 }
 
 // QR Code Component
@@ -81,28 +84,36 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
   const [matches, setMatches] = useState<Match[]>([]);
   const [currentMatch, setCurrentMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
-  const [scanning, setScanning] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(0);
-  const [timerActive, setTimerActive] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [remainingTime, setRemainingTime] = useState(360);
+  const [isMyTurn, setIsMyTurn] = useState(true);
+  const [timeUp, setTimeUp] = useState(false);
   const { toast } = useToast();
   const userId = params.userId;
 
+  // Fetch matches from API
   const fetchMatches = useCallback(async () => {
     try {
       const res = await fetch(`/api/matches/user/${userId}`);
       const data = await res.json();
-      if (data.matches) {
+      
+      if (data.matches && data.matches.length > 0) {
         setMatches(data.matches);
-        // Find current active or pending match - prefer highest round number
+        
+        // Find current match: active first, then pending (prefer highest round)
         const sortedMatches = [...data.matches].sort((a: Match, b: Match) => 
           b.round_number - a.round_number
         );
-        const activeMatch = sortedMatches.find((m: Match) => 
-          m.status === 'active' || m.status === 'pending'
-        );
-        if (activeMatch) {
-          setCurrentMatch(activeMatch);
+        
+        // First look for active match
+        let selectedMatch = sortedMatches.find((m: Match) => m.status === 'active');
+        
+        // If no active, look for pending
+        if (!selectedMatch) {
+          selectedMatch = sortedMatches.find((m: Match) => m.status === 'pending');
+        }
+        
+        if (selectedMatch) {
+          setCurrentMatch(selectedMatch);
         }
       }
     } catch (error) {
@@ -112,66 +123,54 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
     }
   }, [userId]);
 
+  // Initial fetch and polling
   useEffect(() => {
     fetchMatches();
-    const interval = setInterval(fetchMatches, 5000); // Poll every 5 seconds
+    const interval = setInterval(fetchMatches, 3000); // Poll every 3 seconds
     return () => clearInterval(interval);
   }, [fetchMatches]);
 
-  // Timer effect
+  // Timer effect - ONLY when status is 'active' AND started_at exists
   useEffect(() => {
-    if (currentMatch?.status === 'active' && currentMatch.started_at) {
-      const startTime = new Date(currentMatch.started_at).getTime();
-      const duration = currentMatch.event?.round_duration_sec || 360;
-      
-      const updateTimer = () => {
-        const now = Date.now();
-        const elapsed = Math.floor((now - startTime) / 1000);
-        const remaining = Math.max(0, duration - elapsed);
-        setTimeLeft(remaining);
-        setTimerActive(remaining > 0);
-        
-        if (remaining <= 0) {
-          // Timer ended
-          completeMatch();
-        }
-      };
-
-      updateTimer();
-      const interval = setInterval(updateTimer, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [currentMatch]);
-
-  const handleHandshake = async () => {
     if (!currentMatch) return;
+    if (currentMatch.status !== 'active') return;
+    if (!currentMatch.started_at) return;
 
-    try {
-      const res = await fetch(`/api/matches/${currentMatch.id}/handshake`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId })
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        toast({
-          title: data.bothReady ? "Görüşme Başladı! 🎉" : "Handshake Kaydedildi ✅",
-          description: data.bothReady 
-            ? "Her iki taraf da hazır, zamanlaycı başladı!" 
-            : "Karşı tarafın QR taratması bekleniyor..."
-        });
-        fetchMatches();
+    const calculateTime = () => {
+      const startedAt = new Date(currentMatch.started_at!).getTime();
+      const now = Date.now();
+      const elapsedSeconds = Math.floor((now - startedAt) / 1000);
+      const duration = currentMatch.event?.round_duration_sec || 360;
+      const remaining = duration - elapsedSeconds;
+
+      if (remaining <= 0) {
+        setTimeUp(true);
+        setRemainingTime(0);
+        return false; // Stop timer
+      } else {
+        setTimeUp(false);
+        setRemainingTime(remaining);
+        // First half (>180s) = "Sizin Sıranız", Second half (<=180s) = "Partner'in Sırası"
+        setIsMyTurn(remaining > duration / 2);
+        return true; // Continue timer
       }
-    } catch (error: any) {
-      toast({
-        title: "Hata",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
-  };
+    };
 
+    // Initial calculation
+    calculateTime();
+
+    // Set up interval for countdown
+    const interval = setInterval(() => {
+      const shouldContinue = calculateTime();
+      if (!shouldContinue) {
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentMatch?.id, currentMatch?.status, currentMatch?.started_at]);
+
+  // Complete match when time is up
   const completeMatch = async () => {
     if (!currentMatch) return;
     
@@ -179,25 +178,18 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
       await fetch(`/api/matches/${currentMatch.id}/complete`, {
         method: 'POST'
       });
+      setTimeUp(false);
       fetchMatches();
     } catch (error) {
       console.error('Error completing match:', error);
     }
   };
 
+  // Format time as MM:SS
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const startQRScanner = async () => {
-    setScanning(true);
-    // Simulate QR scan - in production use html5-qrcode
-    setTimeout(() => {
-      setScanning(false);
-      handleHandshake();
-    }, 1500);
   };
 
   if (loading) {
@@ -208,20 +200,37 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
     );
   }
 
-  // Timer View - Active Match
-  if (currentMatch?.status === 'active' && timerActive) {
-    const halfTime = (currentMatch.event?.round_duration_sec || 360) / 2;
-    const isFirstHalf = timeLeft > halfTime;
-    const progress = ((currentMatch.event?.round_duration_sec || 360) - timeLeft) / (currentMatch.event?.round_duration_sec || 360) * 100;
+  // STATE: Time is up
+  if (timeUp && currentMatch) {
+    return (
+      <div className="min-h-screen bg-red-600 flex flex-col items-center justify-center p-6 text-white">
+        <Clock className="w-24 h-24 mb-4" />
+        <h1 className="text-4xl font-bold mb-2">Süre Doldu!</h1>
+        <p className="text-xl mb-8">Görüşmeniz tamamlandı</p>
+        <Button 
+          size="lg" 
+          variant="secondary"
+          onClick={completeMatch}
+        >
+          Sonraki Eşleşmeye Geç
+        </Button>
+      </div>
+    );
+  }
+
+  // STATE: Active match with timer running
+  if (currentMatch?.status === 'active' && currentMatch.started_at && !timeUp) {
+    const duration = currentMatch.event?.round_duration_sec || 360;
+    const progress = ((duration - remainingTime) / duration) * 100;
 
     return (
       <div className={`min-h-screen flex flex-col ${
-        timeLeft <= 10 ? 'bg-red-500' : isFirstHalf ? 'bg-blue-500' : 'bg-purple-500'
+        remainingTime <= 10 ? 'bg-red-500' : isMyTurn ? 'bg-blue-500' : 'bg-purple-500'
       } transition-colors duration-500`}>
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-white">
           {/* Timer */}
-          <div className="text-8xl font-bold mb-4 timer-pulse">
-            {formatTime(timeLeft)}
+          <div className="text-8xl font-bold mb-4" style={{ animation: remainingTime <= 10 ? 'pulse 1s infinite' : 'none' }}>
+            {formatTime(remainingTime)}
           </div>
           
           {/* Progress Bar */}
@@ -234,15 +243,15 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
 
           {/* Current Speaker Indicator */}
           <div className="text-2xl font-medium mb-2">
-            {isFirstHalf ? "Sizin Sıranız" : `${currentMatch.partner.full_name}'in Sırası`}
+            {isMyTurn ? "Sizin Sıranız" : `${currentMatch.partner.full_name}'in Sırası`}
           </div>
           <div className="text-white/80 mb-8">
-            {isFirstHalf ? "Kendinizi tanıtın" : "Dinleme zamanı"}
+            {isMyTurn ? "Kendinizi tanıtın" : "Dinleme zamanı"}
           </div>
 
           {/* Icebreaker Question */}
           {currentMatch.icebreaker_question && (
-            <Card className="w-full max-w-md bg-white/10 border-white/20">
+            <Card className="w-full max-w-md bg-white/10 border-white/20 text-white">
               <CardContent className="pt-4">
                 <div className="flex items-start gap-3">
                   <MessageCircle className="w-5 h-5 mt-1 flex-shrink-0" />
@@ -273,29 +282,11 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
     );
   }
 
-  // Timer Ended View
-  if (timeLeft === 0 && currentMatch?.status === 'active') {
-    return (
-      <div className="min-h-screen bg-red-600 flex flex-col items-center justify-center p-6 text-white">
-        <Clock className="w-24 h-24 mb-4" />
-        <h1 className="text-4xl font-bold mb-2">Süre Doldu!</h1>
-        <p className="text-xl mb-8">Görüşmeniz tamamlandı</p>
-        <Button 
-          size="lg" 
-          variant="secondary"
-          onClick={() => {
-            completeMatch();
-            fetchMatches();
-          }}
-        >
-          Sonraki Eşleşmeye Geç
-        </Button>
-      </div>
-    );
-  }
-
-  // Pending Match - QR Handshake View
+  // STATE: Pending match - QR Handshake screen
   if (currentMatch?.status === 'pending') {
+    const bothHandshakesDone = currentMatch.myHandshake && currentMatch.partnerHandshake;
+    const oneHandshakeDone = currentMatch.myHandshake || currentMatch.partnerHandshake;
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <div className="container mx-auto px-4 py-8">
@@ -363,9 +354,9 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
                     Karşınızdaki kişi bu QR kodu taratarak tanışmayı onaylasın
                   </p>
                   
-                  {/* Real QR Code Display */}
+                  {/* QR Code Display */}
                   <div className="flex justify-center mb-4">
-                    {currentMatch.myHandshake ? (
+                    {currentMatch.partnerHandshake ? (
                       <div className="w-52 h-52 rounded-2xl flex items-center justify-center bg-green-100 border-4 border-green-300">
                         <CheckCircle className="text-green-500" style={{ width: 96, height: 96 }} />
                       </div>
@@ -379,7 +370,7 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
                     )}
                   </div>
 
-                  {!currentMatch.myHandshake && (
+                  {!currentMatch.partnerHandshake && (
                     <p className="text-xs text-blue-600 mb-4">
                       📱 {currentMatch.partner.full_name} bu kodu telefonuyla taratsın
                     </p>
@@ -419,44 +410,34 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
                     </div>
                   </div>
 
-                  {/* Both Ready Status */}
-                  {currentMatch.myHandshake && currentMatch.partnerHandshake ? (
-                    <div className="bg-green-100 rounded-lg p-4 mb-4">
-                      <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                  {/* Status Messages */}
+                  {bothHandshakesDone ? (
+                    <div className="bg-green-100 rounded-lg p-4">
+                      <Loader2 className="w-6 h-6 text-green-600 mx-auto mb-2 animate-spin" />
                       <p className="text-green-700 font-medium">
-                        Her iki taraf da hazır! Görüşme başlıyor...
+                        Her iki taraf da hazır! Görüşme başlatılıyor...
                       </p>
                     </div>
-                  ) : currentMatch.myHandshake ? (
-                    <div className="bg-amber-50 rounded-lg p-4 mb-4">
+                  ) : oneHandshakeDone ? (
+                    <div className="bg-amber-50 rounded-lg p-4">
                       <Loader2 className="w-6 h-6 text-amber-600 mx-auto mb-2 animate-spin" />
                       <p className="text-amber-700">
-                        {currentMatch.partner.full_name}'in QR kodunuzu taraması bekleniyor...
+                        {currentMatch.myHandshake 
+                          ? `${currentMatch.partner.full_name}'in QR kodunuzu taraması bekleniyor...`
+                          : "Karşı tarafın QR kodunu taramanız bekleniyor..."}
                       </p>
                     </div>
                   ) : null}
                 </div>
               </CardContent>
             </Card>
-
-            {/* Manual Start (for demo) */}
-            {currentMatch.myHandshake && currentMatch.partnerHandshake && (
-              <Button 
-                className="w-full" 
-                size="lg"
-                onClick={fetchMatches}
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Görüşmeyi Başlat
-              </Button>
-            )}
           </div>
         </div>
       </div>
     );
   }
 
-  // No Active Match - List View
+  // STATE: No active/pending match - List View
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
@@ -523,9 +504,9 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
                           </div>
                         )}
                       </div>
-                      {match.status === 'pending' && (
+                      {(match.status === 'pending' || match.status === 'active') && (
                         <Button onClick={() => setCurrentMatch(match)}>
-                          Başlat
+                          {match.status === 'active' ? 'Devam Et' : 'Başlat'}
                         </Button>
                       )}
                     </div>
