@@ -18,6 +18,7 @@ export async function GET(
       .order('round_number', { ascending: true });
 
     console.log('All matches in DB:', allMatches?.length);
+    console.log('Match IDs:', allMatches?.map(m => ({ id: m.id.slice(0,8), round: m.round_number, ua: m.user_a_id.slice(0,8), ub: m.user_b_id.slice(0,8) })));
     
     if (allError) {
       console.error('Supabase error:', allError);
@@ -30,6 +31,7 @@ export async function GET(
     );
 
     console.log('Filtered matches for user:', matchesData.length);
+    console.log('Filtered match IDs:', matchesData.map(m => m.id.slice(0,8)));
 
     // Now get the related data for each match
     const transformedMatches = await Promise.all(matchesData.map(async (match) => {
