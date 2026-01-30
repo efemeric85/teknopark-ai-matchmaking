@@ -109,7 +109,12 @@ export default function HandshakePage({
                   <XCircle className="w-10 h-10 text-red-600" />
                 </div>
                 <h1 className="text-2xl font-bold text-red-700 mb-2">Hata</h1>
-                <p className="text-gray-600 mb-6">{message}</p>
+                <p className="text-gray-600 mb-4">{message}</p>
+                {debugInfo && (
+                  <p className="text-xs text-gray-400 mb-4 font-mono bg-gray-100 p-2 rounded">
+                    Debug: {debugInfo}
+                  </p>
+                )}
                 <Button 
                   variant="outline"
                   className="w-full"
