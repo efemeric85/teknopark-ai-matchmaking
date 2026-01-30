@@ -13,21 +13,35 @@ export default function HandshakePage({
 }) {
   const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'already'>('loading');
   const [message, setMessage] = useState('');
-  const [partnerName, setPartnerName] = useState('');
+  const [debugInfo, setDebugInfo] = useState('');
   const router = useRouter();
   const { matchId, oderId } = params;
 
   useEffect(() => {
     const confirmHandshake = async () => {
+      console.log('Handshake page loaded:', { matchId, oderId });
+      setDebugInfo(`Match: ${matchId?.slice(0,8)}... User: ${oderId?.slice(0,8)}...`);
+      
+      if (!matchId || !oderId) {
+        setStatus('error');
+        setMessage('Geçersiz QR kodu - parametreler eksik');
+        return;
+      }
+
       try {
+        const apiUrl = `/api/matches/${matchId}/handshake`;
+        console.log('Calling API:', apiUrl, 'with user_id:', oderId);
+        
         // Call the handshake API with the scanner's user ID (oderId)
-        const res = await fetch(`/api/matches/${matchId}/handshake`, {
+        const res = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_id: oderId })
         });
 
+        console.log('API response status:', res.status);
         const data = await res.json();
+        console.log('API response data:', data);
 
         if (data.success) {
           if (data.bothReady) {
@@ -45,8 +59,9 @@ export default function HandshakePage({
           setMessage(data.error || 'Bir hata oluştu');
         }
       } catch (error: any) {
+        console.error('Handshake fetch error:', error);
         setStatus('error');
-        setMessage('Bağlantı hatası. Lütfen tekrar deneyin.');
+        setMessage('Bağlantı hatası: ' + (error.message || 'Lütfen tekrar deneyin.'));
       }
     };
 
