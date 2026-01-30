@@ -9,32 +9,30 @@ export async function GET(
     const supabase = createServerClient();
     const userId = params.userId;
 
-    // Query matches directly without complex joins first
-    const { data: rawMatches, error: rawError } = await supabase
+    console.log('Fetching matches for userId:', userId);
+
+    // Get all matches and filter
+    const { data: allMatches, error: allError } = await supabase
       .from('matches')
       .select('*')
-      .or(`user_a_id.eq.${userId},user_b_id.eq.${userId}`)
       .order('round_number', { ascending: true });
 
-    if (rawError) {
-      console.error('Raw matches error:', rawError);
+    console.log('All matches in DB:', allMatches?.length);
+    
+    if (allError) {
+      console.error('Supabase error:', allError);
+      throw allError;
     }
 
-    // If direct query fails, get all and filter
-    let matchesData = rawMatches;
-    if (!matchesData || matchesData.length === 0) {
-      const { data: allMatches } = await supabase
-        .from('matches')
-        .select('*')
-        .order('round_number', { ascending: true });
-      
-      matchesData = (allMatches || []).filter(match => 
-        match.user_a_id === userId || match.user_b_id === userId
-      );
-    }
+    // Filter matches where user is either user_a or user_b
+    const matchesData = (allMatches || []).filter(match => 
+      match.user_a_id === userId || match.user_b_id === userId
+    );
+
+    console.log('Filtered matches for user:', matchesData.length);
 
     // Now get the related data for each match
-    const transformedMatches = await Promise.all((matchesData || []).map(async (match) => {
+    const transformedMatches = await Promise.all(matchesData.map(async (match) => {
       // Get user_a
       const { data: userA } = await supabase
         .from('users')
