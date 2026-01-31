@@ -1,5 +1,3 @@
-// ... (mevcut kodun devamı, if (currentMatch?.status === 'pending') bloğunun kapanışından sonra)
-
   // STATE: Waiting - User has matches but all completed (odd number situation)
   const hasPendingOrActive = matches.some(m => m.status === 'pending' || m.status === 'active');
   const isWaitingForNextRound = matches.length > 0 && !hasPendingOrActive && !currentMatch;
