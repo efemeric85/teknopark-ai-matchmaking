@@ -9,7 +9,6 @@ export async function GET(
   { params }: { params: { userId: string } }
 ) {
   try {
-    // Create fresh client for each request
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -21,7 +20,24 @@ export async function GET(
     
     const userId = params.userId;
 
-    // Get all matches and filter
+    // Check if user is registered for any active event
+    const { data: eventUser } = await supabase
+      .from('event_users')
+      .select(`
+        event_id,
+        checked_in,
+        events:event_id (
+          id,
+          status
+        )
+      `)
+      .eq('user_id', userId)
+      .eq('checked_in', true)
+      .single();
+
+    const isInActiveEvent = eventUser?.events?.status === 'active';
+
+    // Get all matches
     const { data: allMatches, error: allError } = await supabase
       .from('matches')
       .select('*')
@@ -32,12 +48,19 @@ export async function GET(
       throw allError;
     }
 
-    // Filter matches where user is either user_a or user_b
+    // Filter matches for this user
     const matchesData = (allMatches || []).filter(match => 
       match.user_a_id === userId || match.user_b_id === userId
     );
 
-    // Now get the related data for each match
+    // Check if there are any matches in user's event (to know if matching started)
+    let matchingStarted = false;
+    if (eventUser?.event_id) {
+      const eventMatches = (allMatches || []).filter(m => m.event_id === eventUser.event_id);
+      matchingStarted = eventMatches.length > 0;
+    }
+
+    // Transform matches with related data
     const transformedMatches = await Promise.all(matchesData.map(async (match) => {
       const { data: userA } = await supabase
         .from('users')
@@ -75,7 +98,11 @@ export async function GET(
     }));
 
     return NextResponse.json(
-      { matches: transformedMatches },
+      { 
+        matches: transformedMatches,
+        isInActiveEvent,
+        matchingStarted
+      },
       { 
         headers: { 
           'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
