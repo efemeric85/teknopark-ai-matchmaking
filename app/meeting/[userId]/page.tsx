@@ -137,11 +137,12 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
     if (!currentMatch.started_at) return;
 
     const calculateTime = () => {
-      const startedAt = new Date(currentMatch.started_at!).getTime();
-      const now = Date.now();
-      const elapsed = Date.now() - new Date(match.started_at).getTime();
-      const duration = currentMatch.event?.round_duration_sec || 360;
-      const remaining = duration - elapsedSeconds;
+  const startedAt = new Date(currentMatch.started_at!).getTime();
+  const now = Date.now();
+  const elapsedMs = now - startedAt;
+  const elapsedSeconds = Math.floor(elapsedMs / 1000);
+  const duration = currentMatch.event?.round_duration_sec || 360;
+  const remaining = duration - elapsedSeconds;
 
       if (remaining <= 0) {
         setTimeUp(true);
