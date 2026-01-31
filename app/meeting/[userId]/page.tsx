@@ -87,6 +87,8 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
   const [remainingTime, setRemainingTime] = useState(360);
   const [isMyTurn, setIsMyTurn] = useState(true);
   const [timeUp, setTimeUp] = useState(false);
+  const [isInActiveEvent, setIsInActiveEvent] = useState(false);
+  const [matchingStarted, setMatchingStarted] = useState(false);
   const { toast } = useToast();
   const userId = params.userId;
 
@@ -95,6 +97,12 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
     try {
       const res = await fetch(`/api/matches/user/${userId}`);
       const data = await res.json();
+      
+      // Get event info
+      if (data.isInActiveEvent !== undefined) {
+        setIsInActiveEvent(data.isInActiveEvent);
+        setMatchingStarted(data.matchingStarted);
+      }
       
       if (data.matches && data.matches.length > 0) {
         setMatches(data.matches);
@@ -115,6 +123,8 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
         if (selectedMatch) {
           setCurrentMatch(selectedMatch);
         }
+      } else {
+        setMatches([]);
       }
     } catch (error) {
       console.error('Error fetching matches:', error);
@@ -438,11 +448,12 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
     );
   }
 
-  // STATE: Waiting - User has matches but all completed (odd number situation)
+  // STATE: Waiting - User has no match but event is active and matching started
   const hasPendingOrActive = matches.some(m => m.status === 'pending' || m.status === 'active');
-  const isWaitingForNextRound = matches.length > 0 && !hasPendingOrActive && !currentMatch;
+  const isWaitingAllCompleted = matches.length > 0 && !hasPendingOrActive && !currentMatch;
+  const isWaitingNoMatch = matches.length === 0 && isInActiveEvent && matchingStarted;
 
-  if (isWaitingForNextRound) {
+  if (isWaitingAllCompleted || isWaitingNoMatch) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50 flex flex-col items-center justify-center p-6">
         <div className="max-w-md text-center">
