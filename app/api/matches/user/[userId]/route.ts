@@ -28,7 +28,8 @@ export async function GET(
         checked_in,
         events:event_id (
           id,
-          status
+          status,
+          round_duration_sec
         )
       `)
       .eq('user_id', userId)
@@ -36,6 +37,7 @@ export async function GET(
       .single();
 
     const isInActiveEvent = eventUser?.events?.status === 'active';
+    const roundDuration = eventUser?.events?.round_duration_sec || 360;
 
     // Get all matches
     const { data: allMatches, error: allError } = await supabase
@@ -55,9 +57,17 @@ export async function GET(
 
     // Check if there are any matches in user's event (to know if matching started)
     let matchingStarted = false;
+    let activeMatchStartedAt: string | null = null;
+    
     if (eventUser?.event_id) {
       const eventMatches = (allMatches || []).filter(m => m.event_id === eventUser.event_id);
       matchingStarted = eventMatches.length > 0;
+      
+      // Find any active match in the event to get the timer reference
+      const activeMatch = eventMatches.find(m => m.status === 'active' && m.started_at);
+      if (activeMatch) {
+        activeMatchStartedAt = activeMatch.started_at;
+      }
     }
 
     // Transform matches with related data
@@ -101,7 +111,9 @@ export async function GET(
       { 
         matches: transformedMatches,
         isInActiveEvent,
-        matchingStarted
+        matchingStarted,
+        activeMatchStartedAt,
+        roundDuration
       },
       { 
         headers: { 
