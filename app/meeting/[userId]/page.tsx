@@ -89,6 +89,9 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
   const [timeUp, setTimeUp] = useState(false);
   const [isInActiveEvent, setIsInActiveEvent] = useState(false);
   const [matchingStarted, setMatchingStarted] = useState(false);
+  const [activeMatchStartedAt, setActiveMatchStartedAt] = useState<string | null>(null);
+  const [roundDuration, setRoundDuration] = useState(360);
+  const [waitingTime, setWaitingTime] = useState(360);
   const { toast } = useToast();
   const userId = params.userId;
 
@@ -102,6 +105,8 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
       if (data.isInActiveEvent !== undefined) {
         setIsInActiveEvent(data.isInActiveEvent);
         setMatchingStarted(data.matchingStarted);
+        setActiveMatchStartedAt(data.activeMatchStartedAt);
+        setRoundDuration(data.roundDuration || 360);
       }
       
       if (data.matches && data.matches.length > 0) {
@@ -180,6 +185,38 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
 
     return () => clearInterval(interval);
   }, [currentMatch?.id, currentMatch?.status, currentMatch?.started_at]);
+
+  // Waiting timer effect - for users waiting for next round
+  useEffect(() => {
+    if (!activeMatchStartedAt) return;
+    
+    const calculateWaitingTime = () => {
+      const startedAt = new Date(activeMatchStartedAt).getTime();
+      const now = Date.now();
+      const elapsedMs = now - startedAt;
+      const elapsedSeconds = Math.floor(elapsedMs / 1000);
+      const remaining = roundDuration - elapsedSeconds;
+      
+      if (remaining <= 0) {
+        setWaitingTime(0);
+        return false;
+      } else {
+        setWaitingTime(remaining);
+        return true;
+      }
+    };
+
+    calculateWaitingTime();
+
+    const interval = setInterval(() => {
+      const shouldContinue = calculateWaitingTime();
+      if (!shouldContinue) {
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [activeMatchStartedAt, roundDuration]);
 
   // Complete match when time is up
   const completeMatch = async () => {
@@ -454,24 +491,45 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
   const isWaitingNoMatch = matches.length === 0 && isInActiveEvent && matchingStarted;
 
   if (isWaitingAllCompleted || isWaitingNoMatch) {
+    const progress = activeMatchStartedAt ? ((roundDuration - waitingTime) / roundDuration) * 100 : 0;
+    
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-white to-orange-50 flex flex-col items-center justify-center p-6">
-        <div className="max-w-md text-center">
-          <div className="w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Clock className="w-12 h-12 text-amber-600" />
+      <div className="min-h-screen bg-gradient-to-br from-amber-400 via-orange-400 to-amber-500 flex flex-col items-center justify-center p-6">
+        <div className="max-w-md text-center text-white">
+          <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Clock className="w-12 h-12 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Lütfen Bekleyiniz</h1>
-          <p className="text-lg text-gray-600 mb-6">
+          <h1 className="text-3xl font-bold mb-4">Lütfen Bekleyiniz</h1>
+          <p className="text-lg text-white/90 mb-8">
             Bu turda eşleşme sayısı tek olduğu için sıra sizde. 
             Bir sonraki turda öncelikli olarak eşleştirileceksiniz.
           </p>
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-amber-200">
-            <div className="text-sm text-gray-500 mb-2">Tahmini bekleme süresi</div>
-            <div className="text-4xl font-bold text-amber-600">~6 dakika</div>
-          </div>
+          
+          {/* Real Timer */}
+          {activeMatchStartedAt && waitingTime > 0 ? (
+            <div className="bg-white/20 rounded-xl p-6 backdrop-blur-sm mb-6">
+              <div className="text-sm text-white/80 mb-2">Sonraki tura kalan süre</div>
+              <div className="text-6xl font-bold text-white mb-4">
+                {formatTime(waitingTime)}
+              </div>
+              {/* Progress Bar */}
+              <div className="w-full h-2 bg-white/30 rounded-full">
+                <div 
+                  className="h-full bg-white rounded-full transition-all duration-1000"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white/20 rounded-xl p-6 backdrop-blur-sm mb-6">
+              <div className="text-sm text-white/80 mb-2">Tahmini bekleme süresi</div>
+              <div className="text-4xl font-bold text-white">~6 dakika</div>
+            </div>
+          )}
+          
           <Button 
-            variant="outline" 
-            className="mt-6"
+            variant="secondary"
+            className="mt-2"
             onClick={fetchMatches}
           >
             <RefreshCw className="w-4 h-4 mr-2" />
