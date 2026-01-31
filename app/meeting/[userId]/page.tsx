@@ -31,7 +31,7 @@
     );
   }
 
-  // STATE: No active/pending match - List View   <-- BU MEVCUT KOD, KALACAK
+  // STATE: No active/pending match - List View  
   return (
     <div className="min-h-screen bg-gray-50">
     // ... devamı
