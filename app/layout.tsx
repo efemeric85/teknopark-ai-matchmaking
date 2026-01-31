@@ -7,7 +7,14 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Teknopark AI Matchmaking",
-  description: "Yapay zeka destekli B2B networking uygulaması",
+  description: "Yapay zeka destekli B2B networking",
+  manifest: "/manifest.json",
+  themeColor: "#3b82f6",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "AI Match",
+  },
 };
 
 export default function RootLayout({
