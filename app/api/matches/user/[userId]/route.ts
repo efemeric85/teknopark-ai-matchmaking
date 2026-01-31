@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { userId: string } }
 ) {
   try {
-    const supabase = createServerClient();
+    // Create fresh client for each request
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: { persistSession: false },
+        db: { schema: 'public' }
+      }
+    );
+    
     const userId = params.userId;
 
     // Get all matches and filter
@@ -27,21 +39,18 @@ export async function GET(
 
     // Now get the related data for each match
     const transformedMatches = await Promise.all(matchesData.map(async (match) => {
-      // Get user_a
       const { data: userA } = await supabase
         .from('users')
         .select('id, full_name, company, position, current_intent')
         .eq('id', match.user_a_id)
         .single();
 
-      // Get user_b
       const { data: userB } = await supabase
         .from('users')
         .select('id, full_name, company, position, current_intent')
         .eq('id', match.user_b_id)
         .single();
 
-      // Get event
       const { data: event } = await supabase
         .from('events')
         .select('id, name, theme, round_duration_sec')
@@ -69,7 +78,9 @@ export async function GET(
       { matches: transformedMatches },
       { 
         headers: { 
-          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' 
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         } 
       }
     );
