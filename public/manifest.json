@@ -1,19 +1,19 @@
 {
-  "name": "Teknopark AI Matchmaking",
-  "short_name": "AI Match",
-  "description": "Yapay zeka destekli B2B networking",
+  "name": "Teknopark Ankara AI Networking",
+  "short_name": "ATAIN",
+  "description": "Yapay Zeka Kümelenmesi B2B Networking",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#3b82f6",
+  "theme_color": "#00b4d8",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/logo-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/logo-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
