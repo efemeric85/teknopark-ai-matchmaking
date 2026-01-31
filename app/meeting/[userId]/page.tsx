@@ -139,7 +139,7 @@ export default function MeetingPage({ params }: { params: { userId: string } }) 
     const calculateTime = () => {
       const startedAt = new Date(currentMatch.started_at!).getTime();
       const now = Date.now();
-      const elapsedSeconds = Math.floor((now - startedAt) / 1000);
+      const elapsed = Date.now() - new Date(match.started_at).getTime();
       const duration = currentMatch.event?.round_duration_sec || 360;
       const remaining = duration - elapsedSeconds;
 
