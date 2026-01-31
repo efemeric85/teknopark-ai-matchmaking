@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Sparkles, QrCode, Clock, ArrowRight, Loader2 } from 'lucide-react';
+import { Users, Sparkles, QrCode, Clock, ArrowRight, Loader2, CalendarDays, MapPin } from 'lucide-react';
+import Image from 'next/image';
 
 export default function HomePage() {
   const [events, setEvents] = useState<any[]>([]);
@@ -104,23 +105,39 @@ export default function HomePage() {
 
   if (registered && userId) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-blue-50">
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-2xl mx-auto">
             {/* Header */}
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
-                <Sparkles className="w-8 h-8 text-blue-600" />
-              </div>
+              <img 
+                src="/logo-512.png" 
+                alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
+                className="w-32 h-32 mx-auto mb-4"
+              />
               <h1 className="text-3xl font-bold text-gray-900">Kayıt Tamamlandı!</h1>
               <p className="text-gray-600 mt-2">Eşleştirmeler için bekleyiniz</p>
             </div>
 
+            {/* Event Info Banner */}
+            <div className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl p-4 mb-6 text-white">
+              <div className="flex items-center justify-center gap-6 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5" />
+                  <span className="font-semibold">4 Şubat 2026</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-5 h-5" />
+                  <span>Teknopark Ankara</span>
+                </div>
+              </div>
+            </div>
+
             {/* Waiting Card */}
-            <Card className="mb-6 border-2 border-blue-100">
+            <Card className="mb-6 border-2 border-cyan-100">
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center mb-4 timer-pulse">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-4 timer-pulse">
                     <Clock className="w-12 h-12 text-white" />
                   </div>
                   <h2 className="text-xl font-semibold text-gray-900 mb-2">
@@ -132,7 +149,7 @@ export default function HomePage() {
                   </p>
                   <div className="w-full max-w-xs">
                     <Button 
-                      className="w-full" 
+                      className="w-full bg-cyan-600 hover:bg-cyan-700" 
                       onClick={() => window.location.href = `/meeting/${userId}`}
                     >
                       Eşleşmelerimi Gör
@@ -159,36 +176,52 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-blue-50">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
-              <Users className="w-8 h-8 text-blue-600" />
+          <div className="text-center mb-6">
+            <img 
+              src="/logo-512.png" 
+              alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
+              className="w-40 h-40 mx-auto mb-2"
+            />
+            <h1 className="text-2xl font-bold text-gray-900">AI Networking Etkinliği</h1>
+          </div>
+
+          {/* Event Info Banner */}
+          <div className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl p-5 mb-6 text-white text-center">
+            <div className="flex items-center justify-center gap-6 flex-wrap mb-2">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-5 h-5" />
+                <span className="font-bold text-lg">4 Şubat 2026</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <MapPin className="w-5 h-5" />
+                <span className="font-medium">Teknopark Ankara</span>
+              </div>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900">Teknopark AI Matchmaking</h1>
-            <p className="text-gray-600 mt-2">Yapay zeka destekli B2B networking</p>
+            <p className="text-cyan-100 text-sm">Yapay Zeka Kümelenmesi B2B Networking</p>
           </div>
 
           {/* Features */}
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            <div className="text-center p-4 rounded-lg bg-white shadow-sm">
-              <Sparkles className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="text-center p-4 rounded-lg bg-white shadow-sm border border-cyan-100">
+              <Sparkles className="w-8 h-8 text-cyan-500 mx-auto mb-2" />
               <p className="text-sm font-medium text-gray-700">AI Eşleştirme</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-white shadow-sm">
-              <QrCode className="w-8 h-8 text-purple-500 mx-auto mb-2" />
+            <div className="text-center p-4 rounded-lg bg-white shadow-sm border border-cyan-100">
+              <QrCode className="w-8 h-8 text-blue-500 mx-auto mb-2" />
               <p className="text-sm font-medium text-gray-700">QR Handshake</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-white shadow-sm">
+            <div className="text-center p-4 rounded-lg bg-white shadow-sm border border-cyan-100">
               <Clock className="w-8 h-8 text-green-500 mx-auto mb-2" />
               <p className="text-sm font-medium text-gray-700">Zamanlayıcı</p>
             </div>
           </div>
 
           {/* Registration Form */}
-          <Card className="border-2 border-blue-100">
+          <Card className="border-2 border-cyan-100">
             <CardHeader>
               <CardTitle>Katılımcı Kayıt</CardTitle>
               <CardDescription>
@@ -207,8 +240,8 @@ export default function HomePage() {
                           key={event.id}
                           className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
                             selectedEvent === event.id
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 hover:border-blue-200'
+                              ? 'border-cyan-500 bg-cyan-50'
+                              : 'border-gray-200 hover:border-cyan-200'
                           }`}
                           onClick={() => setSelectedEvent(event.id)}
                         >
@@ -281,7 +314,7 @@ export default function HomePage() {
 
                 <Button 
                   type="submit" 
-                  className="w-full" 
+                  className="w-full bg-cyan-600 hover:bg-cyan-700" 
                   size="lg"
                   disabled={submitting || !selectedEvent}
                 >
