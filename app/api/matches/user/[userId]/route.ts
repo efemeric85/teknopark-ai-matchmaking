@@ -65,7 +65,14 @@ export async function GET(
       };
     }));
 
-    return NextResponse.json({ matches: transformedMatches });
+    return NextResponse.json(
+      { matches: transformedMatches },
+      { 
+        headers: { 
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' 
+        } 
+      }
+    );
   } catch (error: any) {
     console.error('Matches fetch error:', error);
     return NextResponse.json(
