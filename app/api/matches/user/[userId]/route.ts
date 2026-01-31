@@ -13,7 +13,7 @@ export async function GET(
     const { data: allMatches, error: allError } = await supabase
       .from('matches')
       .select('*')
-      .order('created_at', { ascending: false }); // Order by most recent first
+      .order('created_at', { ascending: false });
     
     if (allError) {
       console.error('Supabase error:', allError);
@@ -24,25 +24,6 @@ export async function GET(
     const matchesData = (allMatches || []).filter(match => 
       match.user_a_id === userId || match.user_b_id === userId
     );
-
-    // Auto-complete expired matches
-    const now = Date.now();
-    for (const match of matchesData) {
-      if (match.status === 'active' && match.started_at) {
-        const startedAt = new Date(match.started_at).getTime();
-        const elapsed = Math.floor((now - startedAt) / 1000);
-        const duration = 360; // 6 minutes
-        
-        if (elapsed > duration) {
-          // Mark as completed
-          await supabase
-            .from('matches')
-            .update({ status: 'completed' })
-            .eq('id', match.id);
-          match.status = 'completed';
-        }
-      }
-    }
 
     // Now get the related data for each match
     const transformedMatches = await Promise.all(matchesData.map(async (match) => {
