@@ -40,45 +40,28 @@ export default function HomePage() {
       setLoading(true);
       const res = await fetch('/api/events');
       const data = await res.json();
-      console.log('API Response:', data); // Debug
+      console.log('API Response:', data);
       
       if (data.events) {
-        console.log('All events:', data.events); // Debug
-        
-        // Sadece tarihi olan ve active statüsündeki etkinlikleri filtrele
-        // Case-insensitive kontrol
+        // Sadece active statüsündeki etkinlikleri filtrele
         const validEvents = data.events.filter((e: any) => {
           const isActive = e.status?.toLowerCase() === 'active';
-          const hasDate = !!e.event_date;
-          console.log(`Event: ${e.name}, status: ${e.status}, isActive: ${isActive}, hasDate: ${hasDate}`); // Debug
-          return isActive && hasDate;
+          console.log(`Event: ${e.name}, status: ${e.status}, isActive: ${isActive}, event_date: ${e.event_date}`);
+          return isActive;
         });
         
-        console.log('Valid events:', validEvents); // Debug
+        console.log('Valid events:', validEvents);
         
-        // Tarihe göre sırala (en yakın önce)
+        // Tarihi olanları önce, olmayanları sonra sırala
         const sortedEvents = validEvents.sort((a: any, b: any) => {
-          const dateA = new Date(a.event_date).getTime();
-          const dateB = new Date(b.event_date).getTime();
-          return dateA - dateB;
+          if (!a.event_date && !b.event_date) return 0;
+          if (!a.event_date) return 1;
+          if (!b.event_date) return -1;
+          return new Date(a.event_date).getTime() - new Date(b.event_date).getTime();
         });
         
-        // Bugün veya gelecekteki en yakın 1 etkinliği göster
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        const upcomingEvents = sortedEvents.filter((e: any) => {
-          const eventDate = new Date(e.event_date);
-          eventDate.setHours(0, 0, 0, 0);
-          const isUpcoming = eventDate >= today;
-          console.log(`Event: ${e.name}, date: ${e.event_date}, isUpcoming: ${isUpcoming}`); // Debug
-          return isUpcoming;
-        });
-        
-        console.log('Upcoming events:', upcomingEvents); // Debug
-        
-        // En yakın 1 etkinliği al
-        const nearestEvent = upcomingEvents.slice(0, 1);
+        // İlk etkinliği göster
+        const nearestEvent = sortedEvents.slice(0, 1);
         setEvents(nearestEvent);
         
         // Eğer etkinlik varsa otomatik seç
