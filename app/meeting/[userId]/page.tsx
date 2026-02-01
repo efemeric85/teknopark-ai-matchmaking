@@ -338,7 +338,7 @@ export default function MeetingPage() {
                         <Button 
                           size="sm" 
                           onClick={() => startTimer(match.id)}
-                          className="bg-green-600 hover:bg-green-700"
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
                         >
                           <Play className="w-4 h-4 mr-1" />
                           Başlat
