@@ -14,7 +14,7 @@ import {
 
 // Admin credentials - in production, use proper auth
 const ADMIN_CREDENTIALS = {
-  email: 'admin@teknopark.com',
+  email: 'bahtiyarozturk@gmail.com',
   password: 'admin123'
 };
 
