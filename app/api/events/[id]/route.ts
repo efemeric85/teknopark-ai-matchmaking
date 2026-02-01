@@ -1,47 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerClient();
-    
-    // Get event details
-    const { data: event, error: eventError } = await supabase
+    const { data: event, error } = await supabase
       .from('events')
       .select('*')
       .eq('id', params.id)
       .single();
 
-    if (eventError || !event) {
-      return NextResponse.json(
-        { error: 'Etkinlik bulunamadı' },
-        { status: 404 }
-      );
-    }
+    if (error) throw error;
 
     // Get participants
-    const { data: eventUsers, error: usersError } = await supabase
-      .from('event_users')
-      .select(`
-        *,
-        users:user_id (
-          id, email, full_name, company, position, current_intent, created_at
-        )
-      `)
+    const { data: participants } = await supabase
+      .from('users')
+      .select('*')
       .eq('event_id', params.id);
 
-    const participants = eventUsers?.map(eu => eu.users).filter(Boolean) || [];
-
-    return NextResponse.json({ event, participants });
+    return NextResponse.json({
+      event: {
+        ...event,
+        participants: participants || []
+      }
+    });
   } catch (error: any) {
-    console.error('Event fetch error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Bir hata oluştu' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -51,7 +42,6 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    const supabase = createServerClient();
     
     const { data: event, error } = await supabase
       .from('events')
@@ -62,12 +52,38 @@ export async function PATCH(
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, event });
+    return NextResponse.json({ event });
   } catch (error: any) {
-    console.error('Event update error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Etkinlik güncellenirken bir hata oluştu' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // First delete related records (matches, users)
+    await supabase
+      .from('matches')
+      .delete()
+      .eq('event_id', params.id);
+
+    await supabase
+      .from('users')
+      .delete()
+      .eq('event_id', params.id);
+
+    // Then delete the event
+    const { error } = await supabase
+      .from('events')
+      .delete()
+      .eq('id', params.id);
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
