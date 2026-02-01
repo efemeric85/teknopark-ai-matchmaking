@@ -40,11 +40,21 @@ export default function HomePage() {
       setLoading(true);
       const res = await fetch('/api/events');
       const data = await res.json();
+      console.log('API Response:', data); // Debug
+      
       if (data.events) {
-        // Sadece tarihi olan ve completed olmayan etkinlikleri filtrele
-        const validEvents = data.events.filter((e: any) => 
-          e.status !== 'completed' && e.event_date
-        );
+        console.log('All events:', data.events); // Debug
+        
+        // Sadece tarihi olan ve active statüsündeki etkinlikleri filtrele
+        // Case-insensitive kontrol
+        const validEvents = data.events.filter((e: any) => {
+          const isActive = e.status?.toLowerCase() === 'active';
+          const hasDate = !!e.event_date;
+          console.log(`Event: ${e.name}, status: ${e.status}, isActive: ${isActive}, hasDate: ${hasDate}`); // Debug
+          return isActive && hasDate;
+        });
+        
+        console.log('Valid events:', validEvents); // Debug
         
         // Tarihe göre sırala (en yakın önce)
         const sortedEvents = validEvents.sort((a: any, b: any) => {
@@ -53,22 +63,27 @@ export default function HomePage() {
           return dateA - dateB;
         });
         
-        // Sadece bugün veya gelecekteki en yakın 1 etkinliği göster
+        // Bugün veya gelecekteki en yakın 1 etkinliği göster
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
         const upcomingEvents = sortedEvents.filter((e: any) => {
           const eventDate = new Date(e.event_date);
           eventDate.setHours(0, 0, 0, 0);
-          return eventDate >= today;
+          const isUpcoming = eventDate >= today;
+          console.log(`Event: ${e.name}, date: ${e.event_date}, isUpcoming: ${isUpcoming}`); // Debug
+          return isUpcoming;
         });
         
-        // En yakın 1 etkinliği al
-        setEvents(upcomingEvents.slice(0, 1));
+        console.log('Upcoming events:', upcomingEvents); // Debug
         
-        // Eğer tek etkinlik varsa otomatik seç
-        if (upcomingEvents.length === 1) {
-          setSelectedEvent(upcomingEvents[0].id);
+        // En yakın 1 etkinliği al
+        const nearestEvent = upcomingEvents.slice(0, 1);
+        setEvents(nearestEvent);
+        
+        // Eğer etkinlik varsa otomatik seç
+        if (nearestEvent.length > 0) {
+          setSelectedEvent(nearestEvent[0].id);
         }
       }
     } catch (error) {
