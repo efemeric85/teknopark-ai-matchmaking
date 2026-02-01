@@ -26,6 +26,11 @@ export default function HomePage() {
     current_intent: ''
   });
 
+  const [showEmailLogin, setShowEmailLogin] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [lookupEmail, setLookupEmail] = useState('');
+  const [lookingUp, setLookingUp] = useState(false);
+
   useEffect(() => {
     const savedUserId = localStorage.getItem('teknopark_user_id');
     if (savedUserId) {
@@ -118,6 +123,7 @@ export default function HomePage() {
     localStorage.removeItem('teknopark_user_id');
     setUserId(null);
     setRegistered(false);
+    setShowEmailLogin(true);
     setFormData({
       email: '',
       full_name: '',
@@ -125,6 +131,72 @@ export default function HomePage() {
       position: '',
       current_intent: ''
     });
+  };
+
+  const handleEmailLogin = async () => {
+    if (!loginEmail || !selectedEvent) return;
+    
+    try {
+      const res = await fetch(`/api/users/login?email=${encodeURIComponent(loginEmail)}&event_id=${selectedEvent}`);
+      const data = await res.json();
+      
+      if (data.user) {
+        localStorage.setItem('teknopark_user_id', data.user.id);
+        setUserId(data.user.id);
+        setRegistered(true);
+        setShowEmailLogin(false);
+        toast({
+          title: "Giriş Başarılı!",
+          description: "Hoş geldiniz."
+        });
+      } else {
+        toast({
+          title: "Kullanıcı Bulunamadı",
+          description: "Bu email ile kayıt bulunamadı. Lütfen önce kayıt olun.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Hata",
+        description: "Giriş yapılamadı.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleLookup = async () => {
+    if (!lookupEmail) return;
+    
+    setLookingUp(true);
+    try {
+      const res = await fetch(`/api/users/login?email=${encodeURIComponent(lookupEmail)}`);
+      const data = await res.json();
+      
+      if (data.user) {
+        localStorage.setItem('teknopark_user_id', data.user.id);
+        setUserId(data.user.id);
+        setRegistered(true);
+        toast({
+          title: "Giriş Başarılı!",
+          description: "Hoş geldiniz."
+        });
+      } else {
+        toast({
+          title: "Kullanıcı Bulunamadı",
+          description: "Bu email ile kayıt bulunamadı.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Hata",
+        description: "Arama yapılamadı.",
+        variant: "destructive"
+      });
+    } finally {
+      setLookingUp(false);
+    }
   };
 
   const selectedEventData = events.find(e => e.id === selectedEvent);
@@ -219,12 +291,83 @@ export default function HomePage() {
           {/* Registration Form */}
           <Card className="border-2 border-cyan-100">
             <CardHeader>
-              <CardTitle>Katılımcı Kayıt</CardTitle>
+              <div className="flex gap-4 mb-2">
+                <Button 
+                  variant={!showEmailLogin ? "default" : "outline"}
+                  onClick={() => setShowEmailLogin(false)}
+                  className={!showEmailLogin ? "bg-blue-600" : ""}
+                >
+                  Yeni Kayıt
+                </Button>
+                <Button 
+                  variant={showEmailLogin ? "default" : "outline"}
+                  onClick={() => setShowEmailLogin(true)}
+                  className={showEmailLogin ? "bg-blue-600" : ""}
+                >
+                  Giriş Yap
+                </Button>
+              </div>
+              <CardTitle>{showEmailLogin ? 'Email ile Giriş' : 'Katılımcı Kayıt'}</CardTitle>
               <CardDescription>
-                Networking etkinliğine katılmak için bilgilerinizi girin
+                {showEmailLogin 
+                  ? 'Daha önce kayıt olduysanız email adresinizle giriş yapın'
+                  : 'Networking etkinliğine katılmak için bilgilerinizi girin'
+                }
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {/* Email Login Form */}
+              {showEmailLogin ? (
+                <div className="space-y-4">
+                  {events.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Etkinlik</Label>
+                      <div className="grid gap-2">
+                        {events.map((event) => (
+                          <div
+                            key={event.id}
+                            className="p-4 rounded-lg border-2 border-cyan-500 bg-cyan-50"
+                          >
+                            <div className="font-medium">{event.name}</div>
+                            {event.theme && (
+                              <div className="text-sm text-gray-500">Tema: {event.theme}</div>
+                            )}
+                            {event.event_date && (
+                              <div className="text-sm text-cyan-600 flex items-center gap-1 mt-1">
+                                <CalendarDays className="w-3 h-3" />
+                                {new Date(event.event_date).toLocaleDateString('tr-TR', { 
+                                  day: 'numeric', 
+                                  month: 'long', 
+                                  year: 'numeric' 
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="loginEmail">Email Adresiniz</Label>
+                    <Input
+                      id="loginEmail"
+                      type="email"
+                      placeholder="ornek@firma.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button 
+                    onClick={handleEmailLogin}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold" 
+                    size="lg"
+                    disabled={!loginEmail || !selectedEvent}
+                  >
+                    Giriş Yap
+                  </Button>
+                </div>
+              ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Event Selection */}
                 {events.length > 0 && (
@@ -344,6 +487,32 @@ export default function HomePage() {
                   </>
                 )}
               </form>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Already Registered */}
+          <Card className="mt-6 border border-gray-200">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-sm text-gray-600 mb-3">Daha önce kayıt oldunuz mu?</p>
+                <div className="flex gap-2 max-w-md mx-auto">
+                  <Input
+                    type="email"
+                    placeholder="Email adresinizi girin"
+                    value={lookupEmail}
+                    onChange={(e) => setLookupEmail(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button 
+                    variant="outline"
+                    onClick={handleLookup}
+                    disabled={lookingUp}
+                  >
+                    {lookingUp ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Giriş'}
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
