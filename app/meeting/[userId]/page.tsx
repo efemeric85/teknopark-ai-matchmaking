@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,7 +33,7 @@ interface User {
   position: string;
 }
 
-export default function MeetingPage() {
+function MeetingContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const identifier = params.userId as string;
@@ -417,5 +417,20 @@ export default function MeetingPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function MeetingPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-cyan-600" />
+          <p className="text-gray-600">Yükleniyor...</p>
+        </div>
+      </div>
+    }>
+      <MeetingContent />
+    </Suspense>
   );
 }
