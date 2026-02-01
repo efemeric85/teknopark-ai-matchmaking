@@ -51,7 +51,8 @@ export default function MeetingPage() {
   const [totalTime, setTotalTime] = useState(360);
   const [showQR, setShowQR] = useState(false);
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
-  const [timerStarted, setTimerStarted] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingMatchId, setPendingMatchId] = useState<string | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -78,10 +79,9 @@ export default function MeetingPage() {
           : data.matches[0];
         
         if (matchToStart) {
-          setActiveMatchId(matchToStart.id);
-          setTimeLeft(totalTime);
-          setTimerRunning(true);
-          setTimerStarted(true);
+          // QR okutuldu, onay iste
+          setPendingMatchId(matchToStart.id);
+          setShowConfirm(true);
         }
       }
     } catch (err: any) {
@@ -127,6 +127,19 @@ export default function MeetingPage() {
     setTimeLeft(totalTime);
     setTimerRunning(true);
     setShowQR(false);
+    setShowConfirm(false);
+    setPendingMatchId(null);
+  };
+
+  const confirmStart = () => {
+    if (pendingMatchId) {
+      startTimer(pendingMatchId);
+    }
+  };
+
+  const cancelStart = () => {
+    setShowConfirm(false);
+    setPendingMatchId(null);
   };
 
   const pauseTimer = () => {
@@ -135,12 +148,6 @@ export default function MeetingPage() {
 
   const resumeTimer = () => {
     setTimerRunning(true);
-  };
-
-  const resetTimer = () => {
-    setTimerRunning(false);
-    setTimeLeft(totalTime);
-    setActiveMatchId(null);
   };
 
   const formatTime = (seconds: number) => {
@@ -191,6 +198,40 @@ export default function MeetingPage() {
       {/* Audio for timer end */}
       <audio ref={audioRef} src="/timer-end.mp3" />
       
+      {/* Confirmation Modal */}
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-sm">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                  <Play className="w-8 h-8 text-red-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Görüşmeyi Başlat</h3>
+                <p className="text-gray-600 mb-6">
+                  6 dakikalık görüşme sayacı başlayacak. Emin misiniz?
+                </p>
+                <div className="flex gap-3">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={cancelStart}
+                  >
+                    İptal
+                  </Button>
+                  <Button 
+                    className="flex-1 bg-red-600 hover:bg-red-700"
+                    onClick={confirmStart}
+                  >
+                    Evet, Başlat
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="bg-white border-b px-4 py-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
@@ -237,10 +278,6 @@ export default function MeetingPage() {
                       Duraklat
                     </Button>
                   )}
-                  <Button onClick={resetTimer} variant="outline">
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    Sıfırla
-                  </Button>
                 </div>
                 {timeLeft === 0 && (
                   <div className="text-red-600 font-semibold text-lg animate-pulse">
@@ -334,11 +371,14 @@ export default function MeetingPage() {
                       <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
                         Tur {match.round_number}
                       </span>
-                      {activeMatchId !== match.id && (
+                      {activeMatchId !== match.id && shouldStart && (
                         <Button 
                           size="sm" 
-                          onClick={() => startTimer(match.id)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                          onClick={() => {
+                            setPendingMatchId(match.id);
+                            setShowConfirm(true);
+                          }}
+                          className="bg-red-600 hover:bg-red-700 text-white font-semibold"
                         >
                           <Play className="w-4 h-4 mr-1" />
                           Başlat
