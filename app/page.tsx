@@ -110,13 +110,12 @@ export default function HomePage() {
           <div className="max-w-2xl mx-auto">
             {/* Header */}
             <div className="text-center mb-8">
-              <div className="bg-black rounded-2xl p-4 inline-block mb-4">
-                <img 
-                  src="/teknopark-ankara.png" 
-                  alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
-                  className="h-20 w-auto"
-                />
-              </div>
+              <img 
+                src="/logo-final.png" 
+                alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
+                style={{ height: '160px', width: 'auto', maxWidth: '100%' }}
+                className="mx-auto mb-4"
+              />
               <h1 className="text-3xl font-bold text-gray-900">Kayıt Tamamlandı!</h1>
               <p className="text-gray-600 mt-2">Eşleştirmeler için bekleyiniz</p>
             </div>
@@ -166,13 +165,12 @@ export default function HomePage() {
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-6">
-            <div className="bg-black rounded-2xl p-4 inline-block mb-4">
-              <img 
-                src="/teknopark-ankara.png" 
-                alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
-                className="h-20 w-auto"
-              />
-            </div>
+            <img 
+              src="/logo-final.png" 
+              alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
+              style={{ height: '160px', width: 'auto', maxWidth: '100%' }}
+              className="mx-auto mb-4"
+            />
             <h1 className="text-2xl font-bold text-gray-900">AI Networking Platformu</h1>
           </div>
 
