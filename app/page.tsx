@@ -325,7 +325,7 @@ export default function HomePage() {
 
                     <Button 
                       type="submit" 
-                      className="w-full bg-cyan-600 hover:bg-cyan-700" 
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold" 
                       size="lg"
                       disabled={submitting || !selectedEvent}
                     >
