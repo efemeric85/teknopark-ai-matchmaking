@@ -113,7 +113,8 @@ export default function HomePage() {
               <img 
                 src="/logo-white.png" 
                 alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
-                className="h-32 w-auto mx-auto mb-4"
+                style={{ maxHeight: '100px', width: 'auto' }}
+                className="mx-auto mb-4"
               />
               <h1 className="text-3xl font-bold text-gray-900">Kayıt Tamamlandı!</h1>
               <p className="text-gray-600 mt-2">Eşleştirmeler için bekleyiniz</p>
@@ -167,7 +168,8 @@ export default function HomePage() {
             <img 
               src="/logo-white.png" 
               alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
-              className="h-32 w-auto mx-auto mb-2"
+              style={{ maxHeight: '100px', width: 'auto' }}
+              className="mx-auto mb-2"
             />
             <h1 className="text-2xl font-bold text-gray-900">AI Networking Platformu</h1>
           </div>
