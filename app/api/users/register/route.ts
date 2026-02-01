@@ -48,8 +48,7 @@ export async function POST(request: NextRequest) {
       company: body.company || null,
       position: body.position || null,
       current_intent: body.current_intent,
-      event_id: body.event_id,
-      checked_in: true
+      event_id: body.event_id
     };
 
     console.log('Creating user with data:', userData);
