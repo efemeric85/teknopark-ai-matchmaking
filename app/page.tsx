@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Users, Sparkles, QrCode, Clock, ArrowRight, Loader2, CalendarDays, MapPin } from 'lucide-react';
-import Image from 'next/image';
 
 export default function HomePage() {
   const [events, setEvents] = useState<any[]>([]);
@@ -28,7 +27,6 @@ export default function HomePage() {
   });
 
   useEffect(() => {
-    // Check if user is already registered
     const savedUserId = localStorage.getItem('teknopark_user_id');
     if (savedUserId) {
       setUserId(savedUserId);
@@ -103,6 +101,8 @@ export default function HomePage() {
     });
   };
 
+  const selectedEventData = events.find(e => e.id === selectedEvent);
+
   if (registered && userId) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-blue-50">
@@ -110,34 +110,22 @@ export default function HomePage() {
           <div className="max-w-2xl mx-auto">
             {/* Header */}
             <div className="text-center mb-8">
-              <img 
-                src="/logo-512.png" 
-                alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
-                className="w-32 h-32 mx-auto mb-4"
-              />
+              <div className="bg-black rounded-2xl p-4 inline-block mb-4">
+                <img 
+                  src="/logo-final.png" 
+                  alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
+                  className="h-32 w-auto"
+                />
+              </div>
               <h1 className="text-3xl font-bold text-gray-900">Kayıt Tamamlandı!</h1>
               <p className="text-gray-600 mt-2">Eşleştirmeler için bekleyiniz</p>
-            </div>
-
-            {/* Event Info Banner */}
-            <div className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl p-4 mb-6 text-white">
-              <div className="flex items-center justify-center gap-6 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="w-5 h-5" />
-                  <span className="font-semibold">4 Şubat 2026</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5" />
-                  <span>Teknopark Ankara</span>
-                </div>
-              </div>
             </div>
 
             {/* Waiting Card */}
             <Card className="mb-6 border-2 border-cyan-100">
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-4 timer-pulse">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-4">
                     <Clock className="w-12 h-12 text-white" />
                   </div>
                   <h2 className="text-xl font-semibold text-gray-900 mb-2">
@@ -165,9 +153,6 @@ export default function HomePage() {
               <Button variant="outline" onClick={handleLogout}>
                 Farklı Hesapla Giriş
               </Button>
-              <Button variant="outline" onClick={() => window.location.href = '/admin'}>
-                Organizatör Paneli
-              </Button>
             </div>
           </div>
         </div>
@@ -181,27 +166,14 @@ export default function HomePage() {
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-6">
-            <img 
-              src="/logo-512.png" 
-              alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
-              className="w-40 h-40 mx-auto mb-2"
-            />
-            <h1 className="text-2xl font-bold text-gray-900">AI Networking Etkinliği</h1>
-          </div>
-
-          {/* Event Info Banner */}
-          <div className="bg-gradient-to-r from-cyan-500 to-blue-500 rounded-xl p-5 mb-6 text-white text-center">
-            <div className="flex items-center justify-center gap-6 flex-wrap mb-2">
-              <div className="flex items-center gap-2">
-                <CalendarDays className="w-5 h-5" />
-                <span className="font-bold text-lg">4 Şubat 2026</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="w-5 h-5" />
-                <span className="font-medium">Teknopark Ankara</span>
-              </div>
+            <div className="bg-black rounded-2xl p-4 inline-block mb-4">
+              <img 
+                src="/logo-final.png" 
+                alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
+                className="h-40 w-auto"
+              />
             </div>
-            <p className="text-cyan-100 text-sm">Yapay Zeka Kümelenmesi B2B Networking</p>
+            <h1 className="text-2xl font-bold text-gray-900">AI Networking Platformu</h1>
           </div>
 
           {/* Features */}
@@ -249,87 +221,109 @@ export default function HomePage() {
                           {event.theme && (
                             <div className="text-sm text-gray-500">Tema: {event.theme}</div>
                           )}
+                          {event.event_date && (
+                            <div className="text-sm text-cyan-600 flex items-center gap-1 mt-1">
+                              <CalendarDays className="w-3 h-3" />
+                              {new Date(event.event_date).toLocaleDateString('tr-TR', { 
+                                day: 'numeric', 
+                                month: 'long', 
+                                year: 'numeric' 
+                              })}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="ornek@firma.com"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      required
-                    />
+                {events.length === 0 && !loading && (
+                  <div className="text-center py-8 text-gray-500">
+                    <CalendarDays className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                    <p>Şu an aktif etkinlik bulunmuyor.</p>
+                    <p className="text-sm">Lütfen daha sonra tekrar deneyin.</p>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="full_name">Ad Soyad *</Label>
-                    <Input
-                      id="full_name"
-                      placeholder="Ahmet Yılmaz"
-                      value={formData.full_name}
-                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                      required
-                    />
-                  </div>
-                </div>
+                )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="company">Şirket</Label>
-                    <Input
-                      id="company"
-                      placeholder="ABC Teknoloji A.Ş."
-                      value={formData.company}
-                      onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="position">Pozisyon</Label>
-                    <Input
-                      id="position"
-                      placeholder="Yazılım Mühendisi"
-                      value={formData.position}
-                      onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                    />
-                  </div>
-                </div>
+                {events.length > 0 && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="ornek@firma.com"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="full_name">Ad Soyad *</Label>
+                        <Input
+                          id="full_name"
+                          placeholder="Ahmet Yılmaz"
+                          value={formData.full_name}
+                          onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="current_intent">Bugün burada ne arıyorsun? *</Label>
-                  <Textarea
-                    id="current_intent"
-                    placeholder="Örneğin: Yapay zeka projelerimiz için yatırımcı arıyorum, veya: B2B satış için potansiyel müşteriler bulmak istiyorum..."
-                    className="min-h-[100px]"
-                    value={formData.current_intent}
-                    onChange={(e) => setFormData({ ...formData, current_intent: e.target.value })}
-                    required
-                  />
-                </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="company">Şirket</Label>
+                        <Input
+                          id="company"
+                          placeholder="ABC Teknoloji A.Ş."
+                          value={formData.company}
+                          onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="position">Pozisyon</Label>
+                        <Input
+                          id="position"
+                          placeholder="Yazılım Mühendisi"
+                          value={formData.position}
+                          onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                        />
+                      </div>
+                    </div>
 
-                <Button 
-                  type="submit" 
-                  className="w-full bg-cyan-600 hover:bg-cyan-700" 
-                  size="lg"
-                  disabled={submitting || !selectedEvent}
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Kayıt Yapılıyor...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      Etkinliğe Katıl
-                    </>
-                  )}
-                </Button>
+                    <div className="space-y-2">
+                      <Label htmlFor="current_intent">Bugün burada ne arıyorsun? *</Label>
+                      <Textarea
+                        id="current_intent"
+                        placeholder="Örneğin: Yapay zeka projelerimiz için yatırımcı arıyorum, veya: B2B satış için potansiyel müşteriler bulmak istiyorum..."
+                        className="min-h-[100px]"
+                        value={formData.current_intent}
+                        onChange={(e) => setFormData({ ...formData, current_intent: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    <Button 
+                      type="submit" 
+                      className="w-full bg-cyan-600 hover:bg-cyan-700" 
+                      size="lg"
+                      disabled={submitting || !selectedEvent}
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Kayıt Yapılıyor...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-2" />
+                          Etkinliğe Katıl
+                        </>
+                      )}
+                    </Button>
+                  </>
+                )}
               </form>
             </CardContent>
           </Card>
@@ -337,7 +331,7 @@ export default function HomePage() {
           {/* Admin Link */}
           <div className="text-center mt-6">
             <Button variant="link" onClick={() => window.location.href = '/admin'}>
-              Organizatör müsünüz? Yönetim paneline gidin
+              Organizatör Girişi
             </Button>
           </div>
         </div>
