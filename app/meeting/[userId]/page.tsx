@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clock, Users, ArrowLeft, RefreshCw, Building, Briefcase, MessageSquare, QrCode, Play, Pause, RotateCcw } from 'lucide-react';
@@ -35,7 +35,10 @@ interface User {
 
 export default function MeetingPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const identifier = params.userId as string;
+  const shouldStart = searchParams.get('start') === 'true';
+  const matchIdFromUrl = searchParams.get('match');
   
   const [user, setUser] = useState<User | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -48,6 +51,7 @@ export default function MeetingPage() {
   const [totalTime, setTotalTime] = useState(360);
   const [showQR, setShowQR] = useState(false);
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
+  const [timerStarted, setTimerStarted] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -66,6 +70,20 @@ export default function MeetingPage() {
       
       setUser(data.user);
       setMatches(data.matches || []);
+      
+      // Auto-start timer if URL has start=true
+      if (shouldStart && !timerStarted && data.matches && data.matches.length > 0) {
+        const matchToStart = matchIdFromUrl 
+          ? data.matches.find((m: Match) => m.id === matchIdFromUrl) 
+          : data.matches[0];
+        
+        if (matchToStart) {
+          setActiveMatchId(matchToStart.id);
+          setTimeLeft(totalTime);
+          setTimerRunning(true);
+          setTimerStarted(true);
+        }
+      }
     } catch (err: any) {
       setError('Veriler yüklenirken hata oluştu');
     } finally {
@@ -138,7 +156,11 @@ export default function MeetingPage() {
     return 'text-red-600';
   };
 
-  const qrValue = user ? `https://atyzk.vercel.app/meeting/${user.email}?start=true&match=${activeMatchId || ''}` : '';
+  // QR kod partnerin sayfasına yönlendirir ve sayacı başlatır
+  const activeMatch = matches.find(m => m.id === activeMatchId) || matches[0];
+  const qrValue = activeMatch?.partner 
+    ? `https://atyzk.vercel.app/meeting/${activeMatch.partner.id}?start=true&match=${activeMatch.id}`
+    : '';
 
   if (loading) {
     return (
@@ -196,6 +218,9 @@ export default function MeetingPage() {
           <Card className="mb-6 border-2 border-cyan-500 bg-gradient-to-br from-cyan-50 to-blue-50">
             <CardContent className="pt-6">
               <div className="text-center">
+                <p className="text-sm text-gray-600 mb-2">
+                  {matches.find(m => m.id === activeMatchId)?.partner?.full_name} ile görüşme
+                </p>
                 <div className={`text-6xl font-mono font-bold mb-4 ${getTimerColor()}`}>
                   {formatTime(timeLeft)}
                 </div>
@@ -219,7 +244,7 @@ export default function MeetingPage() {
                 </div>
                 {timeLeft === 0 && (
                   <div className="text-red-600 font-semibold text-lg animate-pulse">
-                    Süre Doldu!
+                    ⏰ Süre Doldu!
                   </div>
                 )}
               </div>
@@ -252,15 +277,15 @@ export default function MeetingPage() {
               </div>
               
               {/* QR Code Display */}
-              {showQR && (
+              {showQR && qrValue && (
                 <div className="mt-4 p-4 bg-white rounded-lg text-center">
                   <QRCodeSVG 
-                    value={`https://atyzk.vercel.app/meeting/${user.email}`}
+                    value={qrValue}
                     size={200}
                     className="mx-auto"
                   />
                   <p className="text-sm text-gray-500 mt-2">
-                    Bu QR kodu okutarak eşleşmenizi başlatabilirsiniz
+                    Eşleştiğiniz kişi bu QR'ı okutunca sayaç başlar
                   </p>
                 </div>
               )}
