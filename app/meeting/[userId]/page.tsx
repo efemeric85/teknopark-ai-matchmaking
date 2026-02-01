@@ -223,10 +223,10 @@ function MeetingContent() {
                   </Button>
                   <Button 
                     variant="outline"
-                    className="flex-1 border-red-600 text-red-600 hover:bg-red-50 font-semibold"
+                    className="flex-1 border-red-600 text-red-600 hover:bg-red-50 font-bold"
                     onClick={confirmStart}
                   >
-                    Evet, Başlat
+                    EVET, BAŞLAT
                   </Button>
                 </div>
               </div>
@@ -377,14 +377,15 @@ function MeetingContent() {
                       {activeMatchId !== match.id && shouldStart && (
                         <Button 
                           size="sm" 
+                          variant="outline"
                           onClick={() => {
                             setPendingMatchId(match.id);
                             setShowConfirm(true);
                           }}
-                          className="bg-red-600 hover:bg-red-700 text-white font-semibold"
+                          className="border-red-600 text-red-600 hover:bg-red-50 font-bold"
                         >
-                          <Play className="w-4 h-4 mr-1" />
-                          Başlat
+                          <Play className="w-4 h-4 mr-1 text-red-600" />
+                          BAŞLAT
                         </Button>
                       )}
                     </div>
