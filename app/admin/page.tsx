@@ -514,7 +514,7 @@ export default function AdminPage() {
                   <div className="flex gap-2">
                     <Button 
                       onClick={createEvent} 
-                      className="bg-cyan-600 hover:bg-cyan-700"
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
                       disabled={!newEvent.name || !newEvent.event_date}
                     >
                       Oluştur
@@ -530,7 +530,7 @@ export default function AdminPage() {
 
           {/* Actions */}
           <div className="flex gap-4 mb-6">
-            <Button onClick={() => setShowNewEvent(true)} className="bg-cyan-600 hover:bg-cyan-700">
+            <Button onClick={() => setShowNewEvent(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
               <Plus className="w-4 h-4 mr-2" />
               Yeni Etkinlik
             </Button>
@@ -555,7 +555,7 @@ export default function AdminPage() {
                 <p className="text-gray-500 mb-4">
                   İlk etkinliğinizi oluşturarak başlayın
                 </p>
-                <Button onClick={() => setShowNewEvent(true)} className="bg-cyan-600 hover:bg-cyan-700">
+                <Button onClick={() => setShowNewEvent(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
                   <Plus className="w-4 h-4 mr-2" />
                   Etkinlik Oluştur
                 </Button>
