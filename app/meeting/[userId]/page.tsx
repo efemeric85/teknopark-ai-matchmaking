@@ -223,7 +223,8 @@ function MeetingContent() {
                   </Button>
                   <Button 
                     variant="outline"
-                    className="flex-1 border-red-600 text-red-600 hover:bg-red-50 font-bold"
+                    style={{ color: '#dc2626', borderColor: '#dc2626' }}
+                    className="flex-1 font-bold bg-white hover:bg-red-50"
                     onClick={confirmStart}
                   >
                     EVET, BAŞLAT
@@ -382,9 +383,10 @@ function MeetingContent() {
                             setPendingMatchId(match.id);
                             setShowConfirm(true);
                           }}
-                          className="border-red-600 text-red-600 hover:bg-red-50 font-bold"
+                          style={{ color: '#dc2626', borderColor: '#dc2626' }}
+                          className="font-bold bg-white hover:bg-red-50"
                         >
-                          <Play className="w-4 h-4 mr-1 text-red-600" />
+                          <Play className="w-4 h-4 mr-1" style={{ color: '#dc2626' }} />
                           BAŞLAT
                         </Button>
                       )}
