@@ -255,6 +255,30 @@ export default function AdminPage() {
     }
   };
 
+  const deleteEvent = async (eventId: string) => {
+    if (!confirm('Bu etkinliği silmek istediğinize emin misiniz?')) return;
+    
+    try {
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchEvents();
+        toast({
+          title: "Etkinlik Silindi",
+          description: "Etkinlik başarıyla silindi."
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Hata",
+        description: "Etkinlik silinemedi.",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Login Screen
   if (!isLoggedIn) {
     return (
@@ -629,6 +653,17 @@ export default function AdminPage() {
                             Aktifleştir
                           </Button>
                         )}
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 border-red-300 hover:bg-red-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteEvent(event.id);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                         <Badge className={
                           event.status === 'active' ? 'bg-green-500' :
                           event.status === 'completed' ? 'bg-gray-500' : 'bg-yellow-500'
