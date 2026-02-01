@@ -112,9 +112,9 @@ export default function HomePage() {
             <div className="text-center mb-8">
               <div className="bg-black rounded-2xl p-4 inline-block mb-4">
                 <img 
-                  src="/logo-final.png" 
+                  src="/teknopark-ankara.png" 
                   alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
-                  className="h-32 w-auto"
+                  className="h-20 w-auto"
                 />
               </div>
               <h1 className="text-3xl font-bold text-gray-900">Kayıt Tamamlandı!</h1>
@@ -168,9 +168,9 @@ export default function HomePage() {
           <div className="text-center mb-6">
             <div className="bg-black rounded-2xl p-4 inline-block mb-4">
               <img 
-                src="/logo-final.png" 
+                src="/teknopark-ankara.png" 
                 alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
-                className="h-40 w-auto"
+                className="h-20 w-auto"
               />
             </div>
             <h1 className="text-2xl font-bold text-gray-900">AI Networking Platformu</h1>
