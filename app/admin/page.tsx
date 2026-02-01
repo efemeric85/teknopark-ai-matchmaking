@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Users, Play, RefreshCw, Plus, Loader2, CheckCircle, 
-  Clock, ArrowLeft, Trash2, Settings, LogOut, Lock
+  Clock, ArrowLeft, Trash2, Settings, LogOut, Lock, CalendarDays
 } from 'lucide-react';
 
 // Admin credentials - in production, use proper auth
@@ -130,6 +130,25 @@ export default function AdminPage() {
   };
 
   const createEvent = async () => {
+    // Tarih zorunlu kontrolü
+    if (!newEvent.event_date) {
+      toast({
+        title: "Hata",
+        description: "Etkinlik tarihi zorunludur.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!newEvent.name) {
+      toast({
+        title: "Hata",
+        description: "Etkinlik adı zorunludur.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const res = await fetch('/api/events', {
         method: 'POST',
@@ -299,6 +318,16 @@ export default function AdminPage() {
                   <div>
                     <CardTitle>{selectedEvent.name}</CardTitle>
                     <CardDescription>Tema: {selectedEvent.theme || 'Belirtilmemiş'}</CardDescription>
+                    {selectedEvent.event_date && (
+                      <div className="text-sm text-cyan-600 flex items-center gap-1 mt-2">
+                        <CalendarDays className="w-4 h-4" />
+                        {new Date(selectedEvent.event_date).toLocaleDateString('tr-TR', { 
+                          day: 'numeric', 
+                          month: 'long', 
+                          year: 'numeric' 
+                        })}
+                      </div>
+                    )}
                   </div>
                   <Badge className={
                     selectedEvent.status === 'active' ? 'bg-green-500' :
@@ -446,11 +475,12 @@ export default function AdminPage() {
                 <div className="grid gap-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label>Etkinlik Adı</Label>
+                      <Label>Etkinlik Adı *</Label>
                       <Input
                         placeholder="Yapay Zeka Zirvesi 2026"
                         value={newEvent.name}
                         onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })}
+                        required
                       />
                     </div>
                     <div>
@@ -472,16 +502,21 @@ export default function AdminPage() {
                       />
                     </div>
                     <div>
-                      <Label>Etkinlik Tarihi</Label>
+                      <Label>Etkinlik Tarihi *</Label>
                       <Input
                         type="date"
                         value={newEvent.event_date}
                         onChange={(e) => setNewEvent({ ...newEvent, event_date: e.target.value })}
+                        required
                       />
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={createEvent} className="bg-cyan-600 hover:bg-cyan-700">
+                    <Button 
+                      onClick={createEvent} 
+                      className="bg-cyan-600 hover:bg-cyan-700"
+                      disabled={!newEvent.name || !newEvent.event_date}
+                    >
                       Oluştur
                     </Button>
                     <Button variant="outline" onClick={() => setShowNewEvent(false)}>
@@ -542,7 +577,8 @@ export default function AdminPage() {
                           Tema: {event.theme || 'Belirtilmemiş'} • Tur: {Math.floor(event.round_duration_sec / 60)} dk
                         </div>
                         {event.event_date && (
-                          <div className="text-sm text-cyan-600 mt-1">
+                          <div className="text-sm text-cyan-600 flex items-center gap-1 mt-1">
+                            <CalendarDays className="w-3 h-3" />
                             {new Date(event.event_date).toLocaleDateString('tr-TR', { 
                               day: 'numeric', 
                               month: 'long', 
