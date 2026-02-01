@@ -222,7 +222,8 @@ function MeetingContent() {
                     İptal
                   </Button>
                   <Button 
-                    className="flex-1 bg-red-600 hover:bg-red-700"
+                    variant="outline"
+                    className="flex-1 border-red-600 text-red-600 hover:bg-red-50 font-semibold"
                     onClick={confirmStart}
                   >
                     Evet, Başlat
