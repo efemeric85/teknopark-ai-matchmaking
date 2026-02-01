@@ -53,6 +53,7 @@ function MeetingContent() {
   const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingMatchId, setPendingMatchId] = useState<string | null>(null);
+  const [timerStarted, setTimerStarted] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -126,6 +127,7 @@ function MeetingContent() {
     setActiveMatchId(matchId);
     setTimeLeft(totalTime);
     setTimerRunning(true);
+    setTimerStarted(true);
     setShowQR(false);
     setShowConfirm(false);
     setPendingMatchId(null);
