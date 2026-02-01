@@ -8,27 +8,49 @@ const supabase = createClient(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: { identifier: string } }
 ) {
   try {
-    const userId = params.userId;
-
-    // Get user info
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
-
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
+    const identifier = params.identifier;
+    
+    // Check if identifier is email or UUID
+    const isEmail = identifier.includes('@');
+    
+    let user;
+    
+    if (isEmail) {
+      // Find user by email
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', identifier)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (error || !data) {
+        return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
+      }
+      user = data;
+    } else {
+      // Find user by UUID
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', identifier)
+        .single();
+      
+      if (error || !data) {
+        return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
+      }
+      user = data;
     }
 
     // Get matches where user is either user1 or user2
     const { data: matches, error: matchesError } = await supabase
       .from('matches')
       .select('*')
-      .or(`user1_id.eq.${userId},user2_id.eq.${userId}`);
+      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
 
     if (matchesError) {
       console.error('Matches error:', matchesError);
@@ -38,7 +60,7 @@ export async function GET(
     // Get partner info for each match
     const matchesWithPartners = await Promise.all(
       (matches || []).map(async (match) => {
-        const partnerId = match.user1_id === userId ? match.user2_id : match.user1_id;
+        const partnerId = match.user1_id === user.id ? match.user2_id : match.user1_id;
         
         const { data: partner } = await supabase
           .from('users')
