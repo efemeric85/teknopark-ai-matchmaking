@@ -1,97 +1,80 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@/lib/supabase';
-import { generateEmbedding } from '@/lib/openai';
-import { v4 as uuidv4 } from 'uuid';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, full_name, company, position, current_intent, event_id } = body;
+    
+    console.log('Registration request body:', body);
 
-    if (!email || !full_name || !current_intent) {
-      return NextResponse.json(
-        { error: 'Email, isim ve hedef alanları zorunludur' },
-        { status: 400 }
-      );
+    // Validate required fields
+    if (!body.email || !body.full_name || !body.current_intent) {
+      return NextResponse.json({ 
+        error: 'Email, ad soyad ve amaç zorunludur.' 
+      }, { status: 400 });
     }
 
-    const supabase = createServerClient();
+    if (!body.event_id) {
+      return NextResponse.json({ 
+        error: 'Etkinlik seçilmedi.' 
+      }, { status: 400 });
+    }
 
-    // Check if user already exists
+    // Check if user already registered for this event
     const { data: existingUser } = await supabase
       .from('users')
-      .select('*')
-      .eq('email', email)
+      .select('id')
+      .eq('email', body.email)
+      .eq('event_id', body.event_id)
       .single();
 
-    let user;
-
     if (existingUser) {
-      // Update existing user
-      const embedding = await generateEmbedding(
-        `${full_name} - ${company || ''} - ${position || ''} - ${current_intent}`
-      );
-
-      const { data, error } = await supabase
-        .from('users')
-        .update({
-          full_name,
-          company,
-          position,
-          current_intent,
-          embedding: JSON.stringify(embedding)
-        })
-        .eq('email', email)
-        .select()
-        .single();
-
-      if (error) throw error;
-      user = data;
-    } else {
-      // Create new user with embedding
-      const embedding = await generateEmbedding(
-        `${full_name} - ${company || ''} - ${position || ''} - ${current_intent}`
-      );
-
-      const userId = uuidv4();
-      const { data, error } = await supabase
-        .from('users')
-        .insert({
-          id: userId,
-          email,
-          full_name,
-          company,
-          position,
-          current_intent,
-          embedding: JSON.stringify(embedding)
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      user = data;
+      return NextResponse.json({ 
+        success: true,
+        user: existingUser,
+        message: 'Bu etkinliğe zaten kayıtlısınız.'
+      });
     }
 
-    // If event_id provided, add user to event
-    if (event_id && user) {
-      const { error: eventUserError } = await supabase
-        .from('event_users')
-        .upsert({
-          id: uuidv4(),
-          event_id,
-          user_id: user.id,
-          checked_in: true
-        }, { onConflict: 'event_id,user_id' });
+    // Create user
+    const userData = {
+      email: body.email,
+      full_name: body.full_name,
+      company: body.company || null,
+      position: body.position || null,
+      current_intent: body.current_intent,
+      event_id: body.event_id,
+      checked_in: true
+    };
 
-      if (eventUserError) console.error('Event user error:', eventUserError);
+    console.log('Creating user with data:', userData);
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .insert(userData)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase error:', error);
+      throw error;
     }
 
-    return NextResponse.json({ success: true, user });
+    console.log('Created user:', user);
+
+    return NextResponse.json({ 
+      success: true, 
+      user 
+    });
   } catch (error: any) {
-    console.error('Registration error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Kayıt sırasında bir hata oluştu' },
-      { status: 500 }
-    );
+    console.error('Error registering user:', error);
+    return NextResponse.json({ 
+      error: error.message || 'Kayıt sırasında hata oluştu.' 
+    }, { status: 500 });
   }
 }
