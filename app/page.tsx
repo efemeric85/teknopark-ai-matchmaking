@@ -41,7 +41,35 @@ export default function HomePage() {
       const res = await fetch('/api/events');
       const data = await res.json();
       if (data.events) {
-        setEvents(data.events.filter((e: any) => e.status !== 'completed'));
+        // Sadece tarihi olan ve completed olmayan etkinlikleri filtrele
+        const validEvents = data.events.filter((e: any) => 
+          e.status !== 'completed' && e.event_date
+        );
+        
+        // Tarihe göre sırala (en yakın önce)
+        const sortedEvents = validEvents.sort((a: any, b: any) => {
+          const dateA = new Date(a.event_date).getTime();
+          const dateB = new Date(b.event_date).getTime();
+          return dateA - dateB;
+        });
+        
+        // Sadece bugün veya gelecekteki en yakın 1 etkinliği göster
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const upcomingEvents = sortedEvents.filter((e: any) => {
+          const eventDate = new Date(e.event_date);
+          eventDate.setHours(0, 0, 0, 0);
+          return eventDate >= today;
+        });
+        
+        // En yakın 1 etkinliği al
+        setEvents(upcomingEvents.slice(0, 1));
+        
+        // Eğer tek etkinlik varsa otomatik seç
+        if (upcomingEvents.length === 1) {
+          setSelectedEvent(upcomingEvents[0].id);
+        }
       }
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -113,7 +141,7 @@ export default function HomePage() {
               <img 
                 src="/logo-white.png" 
                 alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
-                style={{ maxHeight: '120px', width: 'auto' }}
+                style={{ maxHeight: '150px', width: 'auto' }}
                 className="mx-auto mb-4"
               />
               <h1 className="text-3xl font-bold text-gray-900">Kayıt Tamamlandı!</h1>
@@ -168,10 +196,10 @@ export default function HomePage() {
             <img 
               src="/logo-white.png" 
               alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
-              style={{ maxHeight: '120px', width: 'auto' }}
+              style={{ maxHeight: '150px', width: 'auto' }}
               className="mx-auto mb-2"
             />
-            <h1 className="text-2xl font-bold text-gray-900">AI Networking Platformu</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Networking Eşleştirme Uygulaması</h1>
           </div>
 
           {/* Features */}
@@ -203,32 +231,25 @@ export default function HomePage() {
                 {/* Event Selection */}
                 {events.length > 0 && (
                   <div className="space-y-2">
-                    <Label>Etkinlik Seçin</Label>
+                    <Label>Etkinlik</Label>
                     <div className="grid gap-2">
                       {events.map((event) => (
                         <div
                           key={event.id}
-                          className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                            selectedEvent === event.id
-                              ? 'border-cyan-500 bg-cyan-50'
-                              : 'border-gray-200 hover:border-cyan-200'
-                          }`}
-                          onClick={() => setSelectedEvent(event.id)}
+                          className="p-4 rounded-lg border-2 border-cyan-500 bg-cyan-50"
                         >
                           <div className="font-medium">{event.name}</div>
                           {event.theme && (
                             <div className="text-sm text-gray-500">Tema: {event.theme}</div>
                           )}
-                          {event.event_date && (
-                            <div className="text-sm text-cyan-600 flex items-center gap-1 mt-1">
-                              <CalendarDays className="w-3 h-3" />
-                              {new Date(event.event_date).toLocaleDateString('tr-TR', { 
-                                day: 'numeric', 
-                                month: 'long', 
-                                year: 'numeric' 
-                              })}
-                            </div>
-                          )}
+                          <div className="text-sm text-cyan-600 flex items-center gap-1 mt-1">
+                            <CalendarDays className="w-3 h-3" />
+                            {new Date(event.event_date).toLocaleDateString('tr-TR', { 
+                              day: 'numeric', 
+                              month: 'long', 
+                              year: 'numeric' 
+                            })}
+                          </div>
                         </div>
                       ))}
                     </div>
