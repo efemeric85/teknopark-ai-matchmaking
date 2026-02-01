@@ -8,10 +8,14 @@ const supabase = createClient(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { identifier: string } }
+  { params }: { params: { userId: string } }
 ) {
   try {
-    const identifier = params.identifier;
+    const identifier = decodeURIComponent(params.userId || '');
+    
+    if (!identifier) {
+      return NextResponse.json({ error: 'Kullanıcı kimliği gerekli' }, { status: 400 });
+    }
     
     // Check if identifier is email or UUID
     const isEmail = identifier.includes('@');
