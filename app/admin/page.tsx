@@ -153,7 +153,10 @@ export default function AdminPage() {
       const res = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newEvent)
+        body: JSON.stringify({
+          ...newEvent,
+          status: 'active'  // Otomatik aktif olsun
+        })
       });
       const data = await res.json();
       if (data.event) {
@@ -213,6 +216,30 @@ export default function AdminPage() {
       const data = await res.json();
       if (data.event) {
         setSelectedEvent(data.event);
+        fetchEvents();
+        toast({
+          title: "Etkinlik Aktifleştirildi",
+          description: "Katılımcılar artık kaydolabilir."
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Hata",
+        description: "Etkinlik aktifleştirilemedi.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const activateEventById = async (eventId: string) => {
+    try {
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'active' })
+      });
+      const data = await res.json();
+      if (data.event) {
         fetchEvents();
         toast({
           title: "Etkinlik Aktifleştirildi",
@@ -566,12 +593,14 @@ export default function AdminPage() {
               {events.map((event) => (
                 <Card 
                   key={event.id} 
-                  className="cursor-pointer hover:border-cyan-300 transition-colors"
-                  onClick={() => fetchParticipants(event.id)}
+                  className="hover:border-cyan-300 transition-colors"
                 >
                   <CardContent className="py-6">
                     <div className="flex items-center justify-between">
-                      <div>
+                      <div 
+                        className="flex-1 cursor-pointer"
+                        onClick={() => fetchParticipants(event.id)}
+                      >
                         <div className="font-medium text-lg">{event.name}</div>
                         <div className="text-sm text-gray-500">
                           Tema: {event.theme || 'Belirtilmemiş'} • Tur: {Math.floor(event.round_duration_sec / 60)} dk
@@ -587,13 +616,27 @@ export default function AdminPage() {
                           </div>
                         )}
                       </div>
-                      <Badge className={
-                        event.status === 'active' ? 'bg-green-500' :
-                        event.status === 'completed' ? 'bg-gray-500' : 'bg-yellow-500'
-                      }>
-                        {event.status === 'active' ? 'Aktif' :
-                         event.status === 'completed' ? 'Tamamlandı' : 'Taslak'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {event.status === 'draft' && (
+                          <Button 
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              activateEventById(event.id);
+                            }}
+                          >
+                            Aktifleştir
+                          </Button>
+                        )}
+                        <Badge className={
+                          event.status === 'active' ? 'bg-green-500' :
+                          event.status === 'completed' ? 'bg-gray-500' : 'bg-yellow-500'
+                        }>
+                          {event.status === 'active' ? 'Aktif' :
+                           event.status === 'completed' ? 'Tamamlandı' : 'Taslak'}
+                        </Badge>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
