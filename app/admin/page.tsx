@@ -431,7 +431,7 @@ export default function AdminPage() {
                   <Button 
                     onClick={startMatching}
                     disabled={matching || participants.length < 2}
-                    className="bg-cyan-600 hover:bg-cyan-700"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
                   >
                     {matching ? (
                       <>
