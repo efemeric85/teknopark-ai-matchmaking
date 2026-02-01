@@ -1,19 +1,19 @@
 {
   "name": "Ankara Teknopark Yapay Zeka Kümelenmesi",
   "short_name": "ATYZK",
-  "description": "Yapay Zeka Kümelenmesi AI Networking",
+  "description": "AI Networking Platformu",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
+  "background_color": "#ffffff",
   "theme_color": "#00b4d8",
   "icons": [
     {
-      "src": "/teknopark-ankara (192).png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/teknopark-ankara (512).png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
