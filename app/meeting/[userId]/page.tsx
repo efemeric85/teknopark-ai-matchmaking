@@ -34,7 +34,7 @@ interface User {
 
 export default function MeetingPage() {
   const params = useParams();
-  const userId = params.userId as string;
+  const identifier = params.userId as string; // Can be email or UUID
   
   const [user, setUser] = useState<User | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -46,7 +46,8 @@ export default function MeetingPage() {
       setLoading(true);
       setError(null);
       
-      const res = await fetch(`/api/meeting/${userId}`);
+      // API now accepts both email and UUID
+      const res = await fetch(`/api/meeting/${encodeURIComponent(identifier)}`);
       const data = await res.json();
       
       console.log('Meeting API response:', data);
@@ -67,10 +68,10 @@ export default function MeetingPage() {
   };
 
   useEffect(() => {
-    if (userId) {
+    if (identifier) {
       fetchMeetingData();
     }
-  }, [userId]);
+  }, [identifier]);
 
   if (loading) {
     return (
