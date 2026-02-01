@@ -240,14 +240,16 @@ export default function HomePage() {
                           {event.theme && (
                             <div className="text-sm text-gray-500">Tema: {event.theme}</div>
                           )}
-                          <div className="text-sm text-cyan-600 flex items-center gap-1 mt-1">
-                            <CalendarDays className="w-3 h-3" />
-                            {new Date(event.event_date).toLocaleDateString('tr-TR', { 
-                              day: 'numeric', 
-                              month: 'long', 
-                              year: 'numeric' 
-                            })}
-                          </div>
+                          {event.event_date && (
+                            <div className="text-sm text-cyan-600 flex items-center gap-1 mt-1">
+                              <CalendarDays className="w-3 h-3" />
+                              {new Date(event.event_date).toLocaleDateString('tr-TR', { 
+                                day: 'numeric', 
+                                month: 'long', 
+                                year: 'numeric' 
+                              })}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
