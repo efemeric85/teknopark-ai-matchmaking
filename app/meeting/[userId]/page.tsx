@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Users, ArrowLeft, RefreshCw, Building, Briefcase, MessageSquare } from 'lucide-react';
+import { Clock, Users, ArrowLeft, RefreshCw, Building, Briefcase, MessageSquare, QrCode, Play, Pause, RotateCcw } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface Partner {
   id: string;
@@ -34,23 +35,29 @@ interface User {
 
 export default function MeetingPage() {
   const params = useParams();
-  const identifier = params.userId as string; // Can be email or UUID
+  const identifier = params.userId as string;
   
   const [user, setUser] = useState<User | null>(null);
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Timer states
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(360); // 6 minutes default
+  const [totalTime, setTotalTime] = useState(360);
+  const [showQR, setShowQR] = useState(false);
+  const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const fetchMeetingData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // API now accepts both email and UUID
       const res = await fetch(`/api/meeting/${encodeURIComponent(identifier)}`);
       const data = await res.json();
-      
-      console.log('Meeting API response:', data);
       
       if (data.error) {
         setError(data.error);
@@ -60,7 +67,6 @@ export default function MeetingPage() {
       setUser(data.user);
       setMatches(data.matches || []);
     } catch (err: any) {
-      console.error('Error fetching meeting data:', err);
       setError('Veriler yüklenirken hata oluştu');
     } finally {
       setLoading(false);
@@ -72,6 +78,67 @@ export default function MeetingPage() {
       fetchMeetingData();
     }
   }, [identifier]);
+
+  // Timer effect
+  useEffect(() => {
+    if (timerRunning && timeLeft > 0) {
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            setTimerRunning(false);
+            // Play sound when timer ends
+            if (audioRef.current) {
+              audioRef.current.play();
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [timerRunning]);
+
+  const startTimer = (matchId: string) => {
+    setActiveMatchId(matchId);
+    setTimeLeft(totalTime);
+    setTimerRunning(true);
+    setShowQR(false);
+  };
+
+  const pauseTimer = () => {
+    setTimerRunning(false);
+  };
+
+  const resumeTimer = () => {
+    setTimerRunning(true);
+  };
+
+  const resetTimer = () => {
+    setTimerRunning(false);
+    setTimeLeft(totalTime);
+    setActiveMatchId(null);
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getTimerColor = () => {
+    const percentage = (timeLeft / totalTime) * 100;
+    if (percentage > 50) return 'text-green-600';
+    if (percentage > 25) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const qrValue = user ? `https://atyzk.vercel.app/meeting/${user.email}?start=true&match=${activeMatchId || ''}` : '';
 
   if (loading) {
     return (
@@ -99,6 +166,9 @@ export default function MeetingPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Audio for timer end */}
+      <audio ref={audioRef} src="/timer-end.mp3" />
+      
       {/* Header */}
       <div className="bg-white border-b px-4 py-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
@@ -121,19 +191,79 @@ export default function MeetingPage() {
 
       {/* Content */}
       <div className="max-w-2xl mx-auto px-4 py-6">
+        {/* Active Timer Card */}
+        {activeMatchId && (
+          <Card className="mb-6 border-2 border-cyan-500 bg-gradient-to-br from-cyan-50 to-blue-50">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <div className={`text-6xl font-mono font-bold mb-4 ${getTimerColor()}`}>
+                  {formatTime(timeLeft)}
+                </div>
+                <div className="flex justify-center gap-3 mb-4">
+                  {!timerRunning && timeLeft > 0 && timeLeft < totalTime && (
+                    <Button onClick={resumeTimer} className="bg-green-600 hover:bg-green-700">
+                      <Play className="w-4 h-4 mr-2" />
+                      Devam
+                    </Button>
+                  )}
+                  {timerRunning && (
+                    <Button onClick={pauseTimer} variant="outline">
+                      <Pause className="w-4 h-4 mr-2" />
+                      Duraklat
+                    </Button>
+                  )}
+                  <Button onClick={resetTimer} variant="outline">
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Sıfırla
+                  </Button>
+                </div>
+                {timeLeft === 0 && (
+                  <div className="text-red-600 font-semibold text-lg animate-pulse">
+                    Süre Doldu!
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* User Info */}
         {user && (
           <Card className="mb-6 border-cyan-200 bg-cyan-50">
             <CardContent className="pt-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-cyan-600 flex items-center justify-center text-white font-bold text-lg">
-                  {user.full_name?.charAt(0) || '?'}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-cyan-600 flex items-center justify-center text-white font-bold text-lg">
+                    {user.full_name?.charAt(0) || '?'}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{user.full_name}</p>
+                    <p className="text-sm text-gray-600">{user.company} • {user.position}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold text-gray-900">{user.full_name}</p>
-                  <p className="text-sm text-gray-600">{user.company} • {user.position}</p>
-                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowQR(!showQR)}
+                >
+                  <QrCode className="w-4 h-4 mr-2" />
+                  QR Kodum
+                </Button>
               </div>
+              
+              {/* QR Code Display */}
+              {showQR && (
+                <div className="mt-4 p-4 bg-white rounded-lg text-center">
+                  <QRCodeSVG 
+                    value={`https://atyzk.vercel.app/meeting/${user.email}`}
+                    size={200}
+                    className="mx-auto"
+                  />
+                  <p className="text-sm text-gray-500 mt-2">
+                    Bu QR kodu okutarak eşleşmenizi başlatabilirsiniz
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -158,8 +288,15 @@ export default function MeetingPage() {
               Görüşme Eşleşmeleriniz ({matches.length})
             </h2>
             
-            {matches.map((match, index) => (
-              <Card key={match.id} className="border-2 border-cyan-100 hover:border-cyan-300 transition-colors">
+            {matches.map((match) => (
+              <Card 
+                key={match.id} 
+                className={`border-2 transition-colors ${
+                  activeMatchId === match.id 
+                    ? 'border-cyan-500 bg-cyan-50' 
+                    : 'border-cyan-100 hover:border-cyan-300'
+                }`}
+              >
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg flex items-center gap-2">
@@ -168,9 +305,21 @@ export default function MeetingPage() {
                       </div>
                       {match.partner?.full_name || 'Bilinmeyen Kullanıcı'}
                     </CardTitle>
-                    <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                      Tur {match.round_number}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                        Tur {match.round_number}
+                      </span>
+                      {activeMatchId !== match.id && (
+                        <Button 
+                          size="sm" 
+                          onClick={() => startTimer(match.id)}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <Play className="w-4 h-4 mr-1" />
+                          Başlat
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
