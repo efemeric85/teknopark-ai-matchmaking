@@ -32,7 +32,7 @@ export default function MeetingPage() {
       const res = await fetch(`/api/meeting/${encodeURIComponent(userId)}`);
       const data = await res.json();
       if (!res.ok) {
-        setError(res.status === 404 ? 'Kullanıcı bulunamadı. Lütfen kayıt olun.' : (data.error || 'Veri alınamadı'));
+        setError(res.status === 404 ? 'Kullanıcı bulunamadı.' : (data.error || 'Veri alınamadı'));
         return;
       }
       setUser(data.user); setMatch(data.match); setPartner(data.partner);
@@ -47,12 +47,11 @@ export default function MeetingPage() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // Timer: aktif match VEYA beklemedeyken son çiftin sayacı
   useEffect(() => {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
 
     let startedAt: string | null = null;
-    let duration = event?.duration || 360;
+    const duration = event?.duration || 360;
 
     if (match?.status === 'active' && match.started_at) {
       startedAt = match.started_at;
@@ -62,7 +61,7 @@ export default function MeetingPage() {
 
     if (!startedAt) { setTimeLeft(null); return; }
 
-    const sa = startedAt; // capture for closure
+    const sa = startedAt;
     const update = () => {
       const elapsed = Math.floor((Date.now() - new Date(sa).getTime()) / 1000);
       setTimeLeft(Math.max(duration - elapsed, 0));
@@ -102,7 +101,7 @@ export default function MeetingPage() {
     </div>
   );
 
-  // ─── STATE: Active match - time's up ───
+  // Active + expired
   if (match?.status === 'active' && timeLeft !== null && timeLeft <= 0) return (
     <div style={S.page}><div style={S.card}>
       {header}
@@ -115,7 +114,7 @@ export default function MeetingPage() {
     </div></div>
   );
 
-  // ─── STATE: Active match - timer running ───
+  // Active + running
   if (match?.status === 'active' && partner && timeLeft !== null && timeLeft > 0) {
     const duration = event?.duration || 360;
     return (
@@ -123,9 +122,7 @@ export default function MeetingPage() {
         {header}
         <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '16px', padding: '20px', marginBottom: '16px' }}>
           <p style={S.label}>Kalan Süre</p>
-          <div style={{ fontSize: '52px', fontWeight: '800', color: tc(timeLeft), fontFamily: "'JetBrains Mono', monospace", lineHeight: '1', marginBottom: '10px' }}>
-            {fmt(timeLeft)}
-          </div>
+          <div style={{ fontSize: '52px', fontWeight: '800', color: tc(timeLeft), fontFamily: "'JetBrains Mono', monospace", lineHeight: '1', marginBottom: '10px' }}>{fmt(timeLeft)}</div>
           <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
             <div style={{ width: `${(timeLeft / duration) * 100}%`, height: '100%', background: tc(timeLeft), borderRadius: '3px', transition: 'width 1s linear' }} />
           </div>
@@ -146,11 +143,10 @@ export default function MeetingPage() {
     );
   }
 
-  // ─── STATE: Pending match - show QR code ───
+  // Pending + QR
   if (match?.status === 'pending' && partner) {
     const activateUrl = `${baseUrl}/activate/${match.id}`;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&bgcolor=0f172a&color=06b6d4&data=${encodeURIComponent(activateUrl)}`;
-
     return (
       <div style={S.page}><div style={S.card}>
         {header}
@@ -165,7 +161,7 @@ export default function MeetingPage() {
             <img src={qrUrl} alt="QR Code" width={200} height={200} style={{ display: 'block' }} />
           </div>
           <p style={{ color: '#94a3b8', fontSize: '12px', margin: '12px 0 0', lineHeight: '1.5' }}>
-            Partnerinizle buluşun. İkinizden biri diğerinin telefonundaki QR kodu okuttuğunda sayaç başlayacak.
+            Partnerinizle buluşun. İkinizden biri diğerinin QR kodunu okuttuğunda sayaç başlayacak.
           </p>
         </div>
         <p style={{ color: '#475569', fontSize: '11px', marginTop: '12px' }}>Tur {match.round_number}</p>
@@ -173,47 +169,29 @@ export default function MeetingPage() {
     );
   }
 
-  // ─── STATE: Waiting (unmatched this round) ───
+  // Waiting
   if (waiting?.isWaiting) {
     const duration = event?.duration || 360;
-    const allPairsStarted = waiting.allStarted;
-    const showTimer = allPairsStarted && timeLeft !== null;
+    const showTimer = waiting.allStarted && timeLeft !== null;
     const timedOut = showTimer && timeLeft! <= 0;
-
     return (
       <div style={S.page}><div style={S.card}>
         {header}
         <div style={{
-          background: timedOut
-            ? 'rgba(239,68,68,0.1)'
-            : showTimer
-              ? 'rgba(6,182,212,0.1)'
-              : 'rgba(245,158,11,0.1)',
+          background: timedOut ? 'rgba(239,68,68,0.1)' : showTimer ? 'rgba(6,182,212,0.1)' : 'rgba(245,158,11,0.1)',
           borderRadius: '16px', padding: '24px',
           border: `1px solid ${timedOut ? 'rgba(239,68,68,0.2)' : showTimer ? 'rgba(6,182,212,0.2)' : 'rgba(245,158,11,0.2)'}`,
         }}>
-
-          {/* ── Durum: Henüz tüm çiftler başlamamış ── */}
-          {!allPairsStarted && (
+          {!waiting.allStarted && (
             <>
               <div style={{ fontSize: '40px', marginBottom: '8px' }}>⏳</div>
               <h2 style={{ color: '#fbbf24', fontSize: '18px', fontWeight: '600', margin: '0 0 8px' }}>Bekleyiniz</h2>
               <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 16px', lineHeight: '1.5' }}>
-                Bu turda tek sayı katılımcı olduğu için beklemedekisiniz. Tüm çiftler eşleştiğinde sayaç burada da başlayacak.
+                Bu turda beklemedekisiniz. Tüm çiftler görüşmeye başladığında sayaç burada da başlayacak.
               </p>
               <div style={{ display: 'flex', justifyContent: 'center', gap: '16px' }}>
-                {waiting.pendingCount > 0 && (
-                  <div style={{ textAlign: 'center' }}>
-                    <p style={{ color: '#f59e0b', fontSize: '20px', fontWeight: '700', margin: '0' }}>{waiting.pendingCount}</p>
-                    <p style={{ color: '#64748b', fontSize: '10px', margin: '0' }}>QR Bekliyor</p>
-                  </div>
-                )}
-                {waiting.activeCount > 0 && (
-                  <div style={{ textAlign: 'center' }}>
-                    <p style={{ color: '#06b6d4', fontSize: '20px', fontWeight: '700', margin: '0' }}>{waiting.activeCount}</p>
-                    <p style={{ color: '#64748b', fontSize: '10px', margin: '0' }}>Görüşmede</p>
-                  </div>
-                )}
+                {waiting.pendingCount > 0 && <div style={{ textAlign: 'center' }}><p style={{ color: '#f59e0b', fontSize: '20px', fontWeight: '700', margin: '0' }}>{waiting.pendingCount}</p><p style={{ color: '#64748b', fontSize: '10px', margin: '0' }}>QR Bekliyor</p></div>}
+                {waiting.activeCount > 0 && <div style={{ textAlign: 'center' }}><p style={{ color: '#06b6d4', fontSize: '20px', fontWeight: '700', margin: '0' }}>{waiting.activeCount}</p><p style={{ color: '#64748b', fontSize: '10px', margin: '0' }}>Görüşmede</p></div>}
               </div>
               <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b', animation: 'pulse 2s infinite' }} />
@@ -221,31 +199,16 @@ export default function MeetingPage() {
               </div>
             </>
           )}
-
-          {/* ── Durum: Tüm çiftler başladı, sayaç göster ── */}
           {showTimer && !timedOut && (
             <>
               <p style={S.label}>Bu Turun Kalan Süresi</p>
-              <div style={{
-                fontSize: '52px', fontWeight: '800', color: tc(timeLeft!),
-                fontFamily: "'JetBrains Mono', monospace", lineHeight: '1',
-                marginBottom: '10px', marginTop: '8px',
-              }}>
-                {fmt(timeLeft!)}
-              </div>
+              <div style={{ fontSize: '52px', fontWeight: '800', color: tc(timeLeft!), fontFamily: "'JetBrains Mono', monospace", lineHeight: '1', marginBottom: '10px', marginTop: '8px' }}>{fmt(timeLeft!)}</div>
               <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden', marginBottom: '12px' }}>
                 <div style={{ width: `${(timeLeft! / duration) * 100}%`, height: '100%', background: tc(timeLeft!), borderRadius: '3px', transition: 'width 1s linear' }} />
               </div>
-              <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0', lineHeight: '1.5' }}>
-                Bu turda beklemedekisiniz. Süre dolduğunda yeni tur başlayacak.
-              </p>
-              <div style={{ marginTop: '12px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '8px 12px' }}>
-                <span style={{ color: '#64748b', fontSize: '11px' }}>{waiting.activeCount} çift görüşme yapıyor</span>
-              </div>
+              <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0' }}>Beklemedekisiniz. Süre dolduğunda yeni tur başlayacak.</p>
             </>
           )}
-
-          {/* ── Durum: Süre doldu ── */}
           {timedOut && (
             <>
               <div style={{ fontSize: '48px', marginBottom: '8px' }}>⏰</div>
@@ -261,7 +224,7 @@ export default function MeetingPage() {
     );
   }
 
-  // ─── STATE: No match, no round ───
+  // No match
   return (
     <div style={S.page}><div style={S.card}>
       {header}
