@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 
-// ─── Types ───
 interface MeetingData {
   v: string;
   user: { id: string; full_name: string; company: string; email: string } | null;
@@ -14,7 +13,8 @@ interface MeetingData {
   error?: string;
 }
 
-// ─── Styles ───
+const DEFAULT_DURATION = 360; // 6 dakika
+
 const S = {
   page: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)', fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: '20px' } as React.CSSProperties,
   card: { background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.1)', padding: '32px 24px', maxWidth: '420px', width: '100%', textAlign: 'center' as const } as React.CSSProperties,
@@ -35,7 +35,6 @@ export default function MeetingPage() {
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const tickRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ─── Fetch meeting data ───
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch(`/api/meeting/${encodeURIComponent(userId)}`, {
@@ -43,7 +42,7 @@ export default function MeetingPage() {
         headers: { 'Cache-Control': 'no-cache' }
       });
       const json = await res.json();
-      console.log('[MEETING-PAGE] API Response:', json.v, json.match?.status, json.match?.started_at);
+      console.log('[MEETING-PAGE] API:', json.v, json.match?.status, 'duration:', json.event?.duration);
       setData(json);
       setError(null);
     } catch (err: any) {
@@ -54,20 +53,17 @@ export default function MeetingPage() {
     }
   }, [userId]);
 
-  // ─── Polling: 3 saniyede bir API'yi kontrol et ───
   useEffect(() => {
     fetchData();
     pollRef.current = setInterval(fetchData, 3000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchData]);
 
-  // ─── Tick: Sayaç için saniyede bir güncelle ───
   useEffect(() => {
     tickRef.current = setInterval(() => setNow(Date.now()), 1000);
     return () => { if (tickRef.current) clearInterval(tickRef.current); };
   }, []);
 
-  // ─── Helper: Kalan süreyi hesapla ───
   const getRemaining = (startedAt: string, duration: number): number => {
     const elapsed = (now - new Date(startedAt).getTime()) / 1000;
     return Math.max(0, duration - elapsed);
@@ -79,7 +75,6 @@ export default function MeetingPage() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // ─── Header component ───
   const header = data?.event ? (
     <div style={{ marginBottom: '24px' }}>
       <p style={S.label}>TEKNOPARK ANKARA</p>
@@ -93,7 +88,6 @@ export default function MeetingPage() {
     </div>
   ) : null;
 
-  // ─── LOADING ───
   if (loading) {
     return (
       <div style={S.page}><div style={S.card}>
@@ -103,7 +97,6 @@ export default function MeetingPage() {
     );
   }
 
-  // ─── ERROR ───
   if (error || data?.error) {
     return (
       <div style={S.page}><div style={S.card}>
@@ -118,7 +111,7 @@ export default function MeetingPage() {
   if (!data) return null;
 
   const { match, partner, event, waiting } = data;
-  const duration = event?.duration || 180;
+  const duration = (event?.duration && event.duration > 0) ? event.duration : DEFAULT_DURATION;
 
   // ═══════════════════════════════════════════
   // STATE 1: PENDING - QR Kod Göster
@@ -131,13 +124,11 @@ export default function MeetingPage() {
     return (
       <div style={S.page}><div style={S.card}>
         {header}
-        {/* Partner Bilgisi */}
         <div style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.15), rgba(59,130,246,0.1))', borderRadius: '16px', padding: '16px', border: '1px solid rgba(6,182,212,0.2)', marginBottom: '16px' }}>
           <p style={S.label}>Eşleştiğiniz Kişi</p>
           <h3 style={{ color: '#fff', fontSize: '18px', fontWeight: '700', margin: '0 0 4px' }}>{partner.full_name}</h3>
           <p style={{ color: '#06b6d4', fontSize: '13px', margin: '0' }}>{partner.company}{partner.title ? ` \u2022 ${partner.title}` : ''}</p>
         </div>
-        {/* QR Code */}
         <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '16px', padding: '20px' }}>
           <p style={{ color: '#e2e8f0', fontSize: '14px', fontWeight: '600', margin: '0 0 12px' }}>📱 QR Kodu Okutun</p>
           <div style={{ background: '#fff', borderRadius: '12px', padding: '12px', display: 'inline-block' }}>
@@ -153,12 +144,11 @@ export default function MeetingPage() {
   }
 
   // ═══════════════════════════════════════════
-  // STATE 2: ACTIVE - Sayaç Çalışıyor veya Süre Dolmuş
+  // STATE 2: ACTIVE - Sayaç
   // ═══════════════════════════════════════════
   if (match?.status === 'active' && match.started_at && partner) {
     const remaining = getRemaining(match.started_at, duration);
 
-    // 2a: Süre devam ediyor
     if (remaining > 0) {
       const progress = remaining / duration;
       const progressColor = remaining > duration * 0.25 ? '#10b981' : remaining > duration * 0.1 ? '#f59e0b' : '#ef4444';
@@ -166,19 +156,16 @@ export default function MeetingPage() {
       return (
         <div style={S.page}><div style={S.card}>
           {header}
-          {/* Partner */}
           <div style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.15), rgba(59,130,246,0.1))', borderRadius: '16px', padding: '16px', border: '1px solid rgba(6,182,212,0.2)', marginBottom: '20px' }}>
             <p style={S.label}>Görüşme Devam Ediyor</p>
             <h3 style={{ color: '#fff', fontSize: '18px', fontWeight: '700', margin: '0 0 4px' }}>{partner.full_name}</h3>
             <p style={{ color: '#06b6d4', fontSize: '13px', margin: '0' }}>{partner.company}{partner.title ? ` \u2022 ${partner.title}` : ''}</p>
           </div>
-          {/* Timer */}
           <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '16px', padding: '24px', marginBottom: '16px' }}>
             <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Kalan Süre</p>
             <p style={{ color: progressColor, fontSize: '48px', fontWeight: '800', fontFamily: 'monospace', margin: '0 0 12px' }}>
               {formatTime(remaining)}
             </p>
-            {/* Progress bar */}
             <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '8px', height: '8px', overflow: 'hidden' }}>
               <div style={{
                 background: `linear-gradient(90deg, ${progressColor}, ${progressColor}88)`,
@@ -187,7 +174,6 @@ export default function MeetingPage() {
               }} />
             </div>
           </div>
-          {/* Goal */}
           {partner.goal && (
             <div style={{ background: 'rgba(99,102,241,0.1)', borderRadius: '12px', padding: '12px', border: '1px solid rgba(99,102,241,0.2)' }}>
               <p style={{ color: '#a5b4fc', fontSize: '11px', margin: '0 0 4px', fontWeight: '600' }}>Ne Arıyor?</p>
@@ -199,7 +185,7 @@ export default function MeetingPage() {
       );
     }
 
-    // 2b: Süre dolmuş
+    // Süre dolmuş
     return (
       <div style={S.page}><div style={S.card}>
         {header}
@@ -218,7 +204,7 @@ export default function MeetingPage() {
   }
 
   // ═══════════════════════════════════════════
-  // STATE 3: BEKLEMEDE (tek sayı katılımcı)
+  // STATE 3: BEKLEMEDE
   // ═══════════════════════════════════════════
   if (waiting?.isWaiting) {
     const hasRunningTimer = waiting.allStarted && waiting.lastStartedAt;
@@ -236,7 +222,6 @@ export default function MeetingPage() {
           <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 16px', lineHeight: '1.5' }}>
             Bu turda tek sayı katılımcı olduğu için eşleşme yapılamadı. Bir sonraki turda eşleşeceksiniz.
           </p>
-          {/* Bekleme sayacı: Diğer çiftlerin kalan süresi */}
           {hasRunningTimer && waitRemaining > 0 && (
             <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '16px', marginTop: '8px' }}>
               <p style={{ color: '#94a3b8', fontSize: '11px', margin: '0 0 4px', textTransform: 'uppercase' }}>Sonraki tur tahmini</p>
@@ -259,7 +244,7 @@ export default function MeetingPage() {
   }
 
   // ═══════════════════════════════════════════
-  // STATE 4: TUR TAMAMLANDI (match yok veya completed)
+  // STATE 4: TUR TAMAMLANDI
   // ═══════════════════════════════════════════
   return (
     <div style={S.page}><div style={S.card}>
