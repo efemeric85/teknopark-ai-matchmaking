@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -14,20 +14,17 @@ interface Event {
   date: string | null;
   round_duration_sec: number;
   status: string;
-  theme?: string;
   created_at: string;
 }
-
 interface User {
   id: string;
-  email: string;
   full_name: string;
   company: string;
   position: string;
-  current_intent: string;
+  email: string;
   event_id: string;
+  current_intent: string;
 }
-
 interface Match {
   id: string;
   event_id: string;
@@ -38,304 +35,315 @@ interface Match {
   icebreaker_question: string;
   status: string;
   started_at: string | null;
-  user1?: User;
-  user2?: User;
-}
-
-function formatDate(d: string | null): string {
-  if (!d) return '';
-  const date = new Date(d);
-  return date.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function formatTimer(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 export default function AdminPage() {
   const [events, setEvents] = useState<Event[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [participants, setParticipants] = useState<User[]>([]);
+  const [sel, setSel] = useState<Event | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
-  const [newEvent, setNewEvent] = useState({ name: '', date: '', duration: 360 });
   const [loading, setLoading] = useState('');
+  const [msg, setMsg] = useState<{ text: string; type: 'ok' | 'err' | 'info' } | null>(null);
   const [tick, setTick] = useState(0);
 
-  // ─── Timer tick (every second) ───
+  // Form
+  const [newName, setNewName] = useState('');
+  const [newDate, setNewDate] = useState('');
+  const [newDuration, setNewDuration] = useState(360);
+
+  // Timer tick
   useEffect(() => {
     const iv = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(iv);
   }, []);
 
-  // ─── Fetch events ───
-  const fetchEvents = useCallback(async () => {
+  // ─── Data loaders ───
+  const loadEvents = useCallback(async () => {
     const { data } = await supabase.from('events').select('*').order('created_at', { ascending: false });
     if (data) {
       setEvents(data);
-      if (selectedEvent) {
-        const updated = data.find((e: Event) => e.id === selectedEvent.id);
-        if (updated) setSelectedEvent(updated);
+      if (sel) {
+        const updated = data.find((e: Event) => e.id === sel.id);
+        if (updated) setSel(updated);
       }
     }
-  }, [selectedEvent]);
+  }, [sel]);
 
-  // ─── Fetch participants ───
-  const fetchParticipants = useCallback(async () => {
-    if (!selectedEvent) return;
-    const { data } = await supabase.from('users').select('*').eq('event_id', selectedEvent.id).order('created_at');
-    if (data) setParticipants(data);
-  }, [selectedEvent]);
+  const loadUsers = useCallback(async (eid: string) => {
+    const { data } = await supabase.from('users').select('*').eq('event_id', eid).order('created_at');
+    if (data) setUsers(data);
+  }, []);
 
-  // ─── Fetch matches + enrich with user info ───
-  const fetchMatches = useCallback(async () => {
-    if (!selectedEvent) return;
-    const { data } = await supabase.from('matches').select('*').eq('event_id', selectedEvent.id).order('round_number').order('table_number');
+  const loadMatches = useCallback(async (eid: string) => {
+    const { data } = await supabase.from('matches').select('*').eq('event_id', eid).order('round_number').order('table_number');
     if (!data) return;
 
-    const userIds = new Set<string>();
-    data.forEach((m: any) => { userIds.add(m.user1_id); userIds.add(m.user2_id); });
-    const { data: users } = await supabase.from('users').select('*').in('id', Array.from(userIds));
-    const userMap: Record<string, User> = {};
-    (users || []).forEach((u: User) => { userMap[u.id] = u; });
-
     // Auto-complete expired
-    const duration = selectedEvent.round_duration_sec || 360;
+    const dur = sel?.round_duration_sec || 360;
     for (const m of data) {
       if (m.status === 'active' && m.started_at) {
         const elapsed = (Date.now() - new Date(m.started_at).getTime()) / 1000;
-        if (elapsed > duration) {
+        if (elapsed > dur) {
           await supabase.from('matches').update({ status: 'completed' }).eq('id', m.id);
           m.status = 'completed';
         }
       }
     }
+    setMatches(data);
+  }, [sel]);
 
-    setMatches(data.map((m: any) => ({ ...m, user1: userMap[m.user1_id], user2: userMap[m.user2_id] })));
-  }, [selectedEvent]);
-
-  // ─── Initial load + polling ───
-  useEffect(() => { fetchEvents(); }, []);
-
+  // Initial + polling
+  useEffect(() => { loadEvents(); }, []);
   useEffect(() => {
-    if (selectedEvent) { fetchParticipants(); fetchMatches(); }
-  }, [selectedEvent?.id]);
-
+    if (sel) { loadUsers(sel.id); loadMatches(sel.id); }
+  }, [sel?.id]);
   useEffect(() => {
     const iv = setInterval(() => {
-      fetchEvents();
-      if (selectedEvent) { fetchParticipants(); fetchMatches(); }
+      loadEvents();
+      if (sel) { loadUsers(sel.id); loadMatches(sel.id); }
     }, 5000);
     return () => clearInterval(iv);
-  }, [selectedEvent]);
+  }, [sel]);
 
-  // ─── Create event ───
-  const handleCreateEvent = async () => {
-    if (!newEvent.name.trim()) return;
-    setLoading('create');
-    await supabase.from('events').insert({
-      name: newEvent.name.trim(),
-      date: newEvent.date || null,
-      round_duration_sec: newEvent.duration || 360,
-      status: 'draft',
-    });
-    setNewEvent({ name: '', date: '', duration: 360 });
-    await fetchEvents();
-    setLoading('');
+  const showMsg = (text: string, type: 'ok' | 'err' | 'info' = 'info') => {
+    setMsg({ text, type });
+    setTimeout(() => setMsg(null), 4000);
   };
 
-  // ─── Delete event ───
-  const handleDeleteEvent = async (id: string) => {
-    if (!confirm('Bu etkinliği ve tüm eşleşmelerini silmek istediğinize emin misiniz?')) return;
+  // ─── User lookup ───
+  const getUser = (id: string): User | undefined => users.find(u => u.id === id);
+
+  // ─── Actions ───
+  const createEvent = async () => {
+    if (!newName.trim()) return;
+    setLoading('create');
+    await supabase.from('events').insert({
+      name: newName.trim(),
+      date: newDate || null,
+      round_duration_sec: newDuration || 360,
+      status: 'draft',
+    });
+    setNewName(''); setNewDate(''); setNewDuration(360);
+    await loadEvents();
+    setLoading('');
+    showMsg('Etkinlik oluşturuldu.', 'ok');
+  };
+
+  const deleteEvent = async (id: string) => {
+    if (!confirm('Bu etkinliği ve tüm verilerini silmek istediğinize emin misiniz?')) return;
     await supabase.from('matches').delete().eq('event_id', id);
     await supabase.from('users').delete().eq('event_id', id);
     await supabase.from('events').delete().eq('id', id);
-    if (selectedEvent?.id === id) { setSelectedEvent(null); setParticipants([]); setMatches([]); }
-    await fetchEvents();
+    if (sel?.id === id) { setSel(null); setUsers([]); setMatches([]); }
+    await loadEvents();
+    showMsg('Etkinlik silindi.', 'ok');
   };
 
-  // ─── Toggle status ───
-  const handleToggleStatus = async (event: Event) => {
-    const newStatus = event.status === 'active' ? 'draft' : 'active';
-    await supabase.from('events').update({ status: newStatus }).eq('id', event.id);
-    await fetchEvents();
+  const toggleStatus = async (ev: Event) => {
+    const newStatus = ev.status === 'active' ? 'draft' : 'active';
+    await supabase.from('events').update({ status: newStatus }).eq('id', ev.id);
+    await loadEvents();
+    showMsg(newStatus === 'active' ? 'Etkinlik yayınlandı.' : 'Etkinlik taslağa alındı.', 'ok');
   };
 
-  // ─── Match participants ───
   const handleMatch = async () => {
-    if (!selectedEvent) return;
+    if (!sel) return;
     setLoading('match');
     try {
-      const res = await fetch(`/api/events/${selectedEvent.id}/match`, { method: 'POST' });
+      const res = await fetch(`/api/events/${sel.id}/match`, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) alert(data.error || 'Eşleştirme hatası');
-    } catch (e: any) { alert(e.message); }
-    await fetchMatches();
+      if (!res.ok) { showMsg(data.error || 'Eşleştirme hatası.', 'err'); }
+      else { showMsg(data.message || `${data.matchCount} eşleşme oluşturuldu.`, 'ok'); }
+    } catch (e: any) { showMsg(e.message, 'err'); }
+    await loadMatches(sel.id);
     setLoading('');
   };
 
-  // ─── Reset all matches ───
   const handleReset = async () => {
-    if (!selectedEvent) return;
+    if (!sel) return;
     if (!confirm('Tüm eşleşmeleri sıfırlamak istediğinize emin misiniz?')) return;
     setLoading('reset');
-    await fetch(`/api/events/${selectedEvent.id}/match`, { method: 'DELETE' });
-    await fetchMatches();
+    await fetch(`/api/events/${sel.id}/match`, { method: 'DELETE' });
+    await loadMatches(sel.id);
     setLoading('');
+    showMsg('Tüm eşleşmeler sıfırlandı.', 'ok');
   };
 
-  // ─── Manual start ───
-  const handleManualStart = async (matchId: string) => {
-    await supabase.from('matches').update({ status: 'active', started_at: new Date().toISOString() }).eq('id', matchId).eq('status', 'pending');
-    await fetchMatches();
+  const manualStart = async (matchId: string) => {
+    await supabase.from('matches').update({
+      status: 'active',
+      started_at: new Date().toISOString(),
+    }).eq('id', matchId).eq('status', 'pending');
+    if (sel) await loadMatches(sel.id);
+    showMsg('Eşleşme manuel başlatıldı.', 'ok');
   };
 
   // ─── Derived state ───
-  const maxRound = matches.length > 0 ? Math.max(...matches.map(m => m.round_number)) : 0;
-  const currentRoundMatches = matches.filter(m => m.round_number === maxRound);
-  const allCurrentDone = currentRoundMatches.length > 0 && currentRoundMatches.every(m => m.status === 'completed');
-  const hasActive = currentRoundMatches.some(m => m.status === 'active');
-  const hasPending = currentRoundMatches.some(m => m.status === 'pending');
+  const curRound = matches.length > 0 ? Math.max(...matches.map(m => m.round_number || 1)) : 0;
+  const curMatches = matches.filter(m => (m.round_number || 1) === curRound);
+  const activeC = curMatches.filter(m => m.status === 'active').length;
+  const pendingC = curMatches.filter(m => m.status === 'pending').length;
+  const completedC = curMatches.filter(m => m.status === 'completed').length;
+  const allDone = curMatches.length > 0 && activeC === 0 && pendingC === 0;
+
+  const matchedIds = new Set<string>();
+  curMatches.forEach(m => { matchedIds.add(m.user1_id); matchedIds.add(m.user2_id); });
+  const unmatchedUsers = curRound > 0 ? users.filter(p => !matchedIds.has(p.id)) : [];
+
+  // Timer helpers
+  const getTimeLeft = (m: Match): number | null => {
+    if (m.status !== 'active' || !m.started_at || !sel) return null;
+    return Math.max((sel.round_duration_sec || 360) - Math.floor((Date.now() - new Date(m.started_at).getTime()) / 1000), 0);
+  };
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+  const tc = (s: number) => s <= 30 ? '#ef4444' : s <= 60 ? '#f59e0b' : '#10b981';
+  const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+
+  // Eşleşme Matrisi
+  const buildMatrix = () => {
+    const mx: Record<string, Record<string, { round: number; status: string; dur: number }>> = {};
+    matches.forEach(m => {
+      if (!mx[m.user1_id]) mx[m.user1_id] = {};
+      if (!mx[m.user2_id]) mx[m.user2_id] = {};
+      const dur = m.started_at
+        ? Math.min(Math.floor((Date.now() - new Date(m.started_at).getTime()) / 1000), sel?.round_duration_sec || 360)
+        : 0;
+      const info = { round: m.round_number, status: m.status, dur };
+      mx[m.user1_id][m.user2_id] = info;
+      mx[m.user2_id][m.user1_id] = info;
+    });
+    return mx;
+  };
 
   // ─── Render ───
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: "'Inter', sans-serif" }}>
-      {/* Header */}
-      <div style={{ background: 'linear-gradient(135deg, #0f172a, #1e293b)', padding: '24px 0', textAlign: 'center' }}>
-        <p style={{ color: '#06b6d4', fontSize: '12px', letterSpacing: '3px', margin: 0 }}>TEKNOPARK ANKARA</p>
-        <h1 style={{ color: '#fff', fontSize: '24px', margin: '4px 0 0' }}>🎯 Admin Paneli</h1>
-      </div>
+    <div style={{ minHeight: '100vh', background: '#fafbfc', fontFamily: "'Inter', sans-serif", padding: '20px' }}>
+      <div style={{ maxWidth: '960px', margin: '0 auto' }}>
 
-      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '24px 16px' }}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+          <p style={{ color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '2px', margin: '0 0 2px' }}>TEKNOPARK ANKARA</p>
+          <h1 style={{ color: '#0f172a', fontSize: '20px', fontWeight: '700', margin: '0' }}>🛠️ Admin Paneli</h1>
+        </div>
 
-        {/* ═══ Event Creation ═══ */}
-        <div style={cardStyle}>
-          <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>Yeni Etkinlik</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <input
-              placeholder="Etkinlik adı"
-              value={newEvent.name}
-              onChange={e => setNewEvent({ ...newEvent, name: e.target.value })}
-              style={inputStyle}
-            />
-            <input
-              type="date"
-              value={newEvent.date}
-              onChange={e => setNewEvent({ ...newEvent, date: e.target.value })}
-              style={inputStyle}
-            />
-            <input
-              type="number"
-              placeholder="Süre (saniye)"
-              value={newEvent.duration}
-              onChange={e => setNewEvent({ ...newEvent, duration: parseInt(e.target.value) || 360 })}
-              style={inputStyle}
-            />
-            <button
-              onClick={handleCreateEvent}
-              disabled={loading === 'create' || !newEvent.name.trim()}
-              style={{ ...btnPrimary, opacity: loading === 'create' || !newEvent.name.trim() ? 0.5 : 1 }}
-            >
+        {/* Message */}
+        {msg && (
+          <div style={{
+            padding: '10px 14px', borderRadius: '8px', marginBottom: '12px', fontSize: '13px', fontWeight: '500',
+            background: msg.type === 'ok' ? '#dcfce7' : msg.type === 'err' ? '#fee2e2' : '#dbeafe',
+            color: msg.type === 'ok' ? '#166534' : msg.type === 'err' ? '#991b1b' : '#1e40af',
+            border: `1px solid ${msg.type === 'ok' ? '#bbf7d0' : msg.type === 'err' ? '#fecaca' : '#bfdbfe'}`,
+          }}>
+            {msg.text}
+          </div>
+        )}
+
+        {/* ═══ Yeni Etkinlik ═══ */}
+        <div style={C}>
+          <h3 style={T}>Yeni Etkinlik</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <input placeholder="Etkinlik adı" value={newName} onChange={e => setNewName(e.target.value)} style={inputStyle} />
+            <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} style={inputStyle} />
+            <input type="number" placeholder="Süre (saniye)" value={newDuration} onChange={e => setNewDuration(parseInt(e.target.value) || 360)} style={inputStyle} />
+            <button onClick={createEvent} disabled={loading === 'create' || !newName.trim()} style={{ ...btnPrimary, opacity: loading === 'create' || !newName.trim() ? 0.5 : 1 }}>
               + Etkinlik Oluştur
             </button>
           </div>
         </div>
 
-        {/* ═══ Event List ═══ */}
-        <div style={{ ...cardStyle, marginTop: '16px' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>Etkinlikler</h2>
-          {events.length === 0 && <p style={{ color: '#94a3b8', fontSize: '14px' }}>Henüz etkinlik yok.</p>}
+        {/* ═══ Etkinlikler ═══ */}
+        <div style={C}>
+          <h3 style={T}>Etkinlikler</h3>
+          {events.length === 0 && <p style={{ color: '#94a3b8', fontSize: '13px' }}>Henüz etkinlik yok.</p>}
           {events.map(ev => (
             <div
               key={ev.id}
-              onClick={() => setSelectedEvent(ev)}
+              onClick={() => setSel(ev)}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '12px 16px', marginBottom: '8px', borderRadius: '10px', cursor: 'pointer',
-                border: selectedEvent?.id === ev.id ? '2px solid #06b6d4' : '1px solid #e2e8f0',
-                background: selectedEvent?.id === ev.id ? '#f0fdfa' : '#fff',
+                padding: '12px 14px', marginBottom: '8px', borderRadius: '10px', cursor: 'pointer',
+                border: sel?.id === ev.id ? '2px solid #06b6d4' : '1px solid #e2e8f0',
+                background: sel?.id === ev.id ? '#f0fdfa' : '#fff',
                 transition: 'all 0.15s',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
-                <div>
-                  <span style={{ fontWeight: 700, fontSize: '15px' }}>{ev.name}</span>
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '2px', fontSize: '12px', color: '#64748b' }}>
-                    {ev.date && <span>📅 {formatDate(ev.date)}</span>}
-                    <span>⏱ {ev.round_duration_sec || 360}s</span>
-                  </div>
+              <div>
+                <span style={{ fontWeight: 700, fontSize: '14px' }}>{ev.name}</span>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '2px', fontSize: '11px', color: '#64748b' }}>
+                  {ev.date && <span>📅 {fmtDate(ev.date)}</span>}
+                  <span>⏱ {ev.round_duration_sec || 360}s</span>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{
-                  padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
+                  padding: '2px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 600,
                   background: ev.status === 'active' ? '#d1fae5' : '#f1f5f9',
                   color: ev.status === 'active' ? '#065f46' : '#64748b',
                 }}>
                   {ev.status === 'active' ? '✓ Aktif' : 'Taslak'}
                 </span>
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleToggleStatus(ev); }}
+                  onClick={(e) => { e.stopPropagation(); toggleStatus(ev); }}
                   style={{
-                    padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                    border: '1px solid',
-                    borderColor: ev.status === 'active' ? '#fca5a5' : '#86efac',
+                    padding: '3px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                    border: '1px solid', borderColor: ev.status === 'active' ? '#fca5a5' : '#86efac',
                     background: ev.status === 'active' ? '#fef2f2' : '#f0fdf4',
                     color: ev.status === 'active' ? '#991b1b' : '#166534',
                   }}
-                  title={ev.status === 'active' ? 'Taslağa al' : 'Yayınla'}
                 >
                   {ev.status === 'active' ? '⏸ Taslağa Al' : '▶ Yayınla'}
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleDeleteEvent(ev.id); }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}
-                  title="Sil"
+                  onClick={(e) => { e.stopPropagation(); deleteEvent(ev.id); }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: '2px' }}
                 >🗑️</button>
               </div>
             </div>
           ))}
         </div>
 
-        {/* ═══ Selected Event Detail ═══ */}
-        {selectedEvent && (
+        {/* ═══ Seçili Etkinlik Detayları ═══ */}
+        {sel && (
           <>
-            {/* Participants */}
-            <div style={{ ...cardStyle, marginTop: '16px' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px' }}>
-                👥 Katılımcılar ({participants.length})
-              </h2>
-              {participants.length === 0 ? (
-                <p style={{ color: '#94a3b8', fontSize: '14px' }}>Henüz katılımcı yok.</p>
+            {/* Katılımcılar */}
+            <div style={C}>
+              <h3 style={T}>👥 Katılımcılar ({users.length})</h3>
+              {users.length === 0 ? (
+                <p style={{ color: '#94a3b8', fontSize: '13px' }}>Henüz katılımcı yok.</p>
               ) : (
-                <div style={{ display: 'grid', gap: '8px' }}>
-                  {participants.map(p => (
-                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: '8px', fontSize: '13px' }}>
+                <div style={{ display: 'grid', gap: '6px' }}>
+                  {users.map(p => (
+                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: '8px', fontSize: '12px' }}>
                       <div>
                         <span style={{ fontWeight: 600 }}>{p.full_name}</span>
-                        <span style={{ color: '#64748b', marginLeft: '8px' }}>{p.company}</span>
+                        <span style={{ color: '#64748b', marginLeft: '6px' }}>{p.company}</span>
+                        {p.position && <span style={{ color: '#94a3b8', marginLeft: '4px' }}>· {p.position}</span>}
                       </div>
-                      <span style={{ color: '#94a3b8', fontSize: '12px' }}>{p.email}</span>
+                      <span style={{ color: '#94a3b8', fontSize: '11px' }}>{p.email}</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Match Management */}
-            <div style={{ ...cardStyle, marginTop: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>🏆 Tur {maxRound || 0}</h2>
+            {/* İstatistikler */}
+            {curRound > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '16px' }}>
+                <StatBox icon="📋" label="Bekleyen" value={pendingC} color="#3b82f6" />
+                <StatBox icon="▶️" label="Aktif" value={activeC} color="#10b981" />
+                <StatBox icon="✅" label="Tamamlanan" value={completedC} color="#8b5cf6" />
+                <StatBox icon="👤" label="Eşleşmemiş" value={unmatchedUsers.length} color="#f59e0b" />
+              </div>
+            )}
+
+            {/* Eşleşme Yönetimi */}
+            <div style={C}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <h3 style={{ ...T, margin: 0 }}>🏆 Tur {curRound || 0}</h3>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {matches.length === 0 && participants.length >= 2 && (
+                  {(matches.length === 0 || allDone) && users.length >= 2 && (
                     <button onClick={handleMatch} disabled={loading === 'match'} style={btnPrimary}>
-                      {loading === 'match' ? '...' : '🎯 Eşleştir'}
-                    </button>
-                  )}
-                  {allCurrentDone && participants.length >= 2 && (
-                    <button onClick={handleMatch} disabled={loading === 'match'} style={btnPrimary}>
-                      {loading === 'match' ? '...' : '➡️ Sonraki Tur'}
+                      {loading === 'match' ? '...' : matches.length === 0 ? '🎯 Eşleştir' : '➡️ Sonraki Tur'}
                     </button>
                   )}
                   {matches.length > 0 && (
@@ -346,50 +354,59 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {matches.length === 0 ? (
-                <p style={{ color: '#94a3b8', fontSize: '14px' }}>Henüz eşleşme yok. {participants.length < 2 ? 'En az 2 katılımcı gerekli.' : '"Eşleştir" butonuna basın.'}</p>
+              {curMatches.length === 0 ? (
+                <p style={{ color: '#94a3b8', fontSize: '13px' }}>
+                  {users.length < 2 ? 'En az 2 katılımcı gerekli.' : 'Henüz eşleşme yok. "Eşleştir" butonuna basın.'}
+                </p>
               ) : (
                 <div style={{ display: 'grid', gap: '8px' }}>
-                  {matches.map(m => {
-                    const duration = selectedEvent.round_duration_sec || 360;
-                    let remaining = 0;
-                    if (m.status === 'active' && m.started_at) {
-                      const elapsed = Math.floor((Date.now() - new Date(m.started_at).getTime()) / 1000);
-                      remaining = Math.max(0, duration - elapsed);
-                    }
+                  {curMatches.map(m => {
+                    const u1 = getUser(m.user1_id);
+                    const u2 = getUser(m.user2_id);
+                    const timeLeft = getTimeLeft(m);
 
                     return (
                       <div key={m.id} style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '12px 16px', borderRadius: '10px',
+                        padding: '12px 14px', borderRadius: '10px',
                         background: m.status === 'active' ? '#f0fdf4' : m.status === 'pending' ? '#eff6ff' : '#f8fafc',
                         border: `1px solid ${m.status === 'active' ? '#bbf7d0' : m.status === 'pending' ? '#bfdbfe' : '#e2e8f0'}`,
                       }}>
-                        <div>
-                          <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '2px' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '2px' }}>
                             Tur {m.round_number} · Masa {m.table_number}
                           </div>
                           <div style={{ fontSize: '14px', fontWeight: 600 }}>
-                            {m.user1?.full_name || '?'} ↔ {m.user2?.full_name || '?'}
+                            {u1?.full_name || '?'} <span style={{ color: '#94a3b8' }}>↔</span> {u2?.full_name || '?'}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                            {u1?.company || ''} · {u2?.company || ''}
                           </div>
                           {m.icebreaker_question && (
-                            <div style={{ fontSize: '11px', color: '#0891b2', marginTop: '2px' }}>💬 {m.icebreaker_question}</div>
+                            <div style={{ fontSize: '10px', color: '#0891b2', marginTop: '3px' }}>💬 {m.icebreaker_question}</div>
                           )}
                         </div>
-                        <div style={{ textAlign: 'right' }}>
+                        <div style={{ textAlign: 'right', minWidth: '100px' }}>
                           {m.status === 'pending' && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ fontSize: '12px', color: '#3b82f6' }}>📱 QR Bekliyor</span>
-                              <button onClick={() => handleManualStart(m.id)} style={btnSmall}>Manuel Başlat</button>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                              <span style={{ fontSize: '11px', color: '#3b82f6' }}>📱 QR Bekliyor</span>
+                              <button onClick={() => manualStart(m.id)} style={{
+                                padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0',
+                                background: '#fff', color: '#334155', fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+                              }}>Manuel Başlat</button>
                             </div>
                           )}
-                          {m.status === 'active' && (
-                            <div style={{ fontSize: '20px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: remaining < 60 ? '#ef4444' : '#16a34a' }}>
-                              {formatTimer(remaining)}
+                          {m.status === 'active' && timeLeft !== null && (
+                            <div style={{
+                              fontSize: '24px', fontWeight: 700,
+                              fontVariantNumeric: 'tabular-nums',
+                              color: tc(timeLeft),
+                            }}>
+                              {fmt(timeLeft)}
                             </div>
                           )}
                           {m.status === 'completed' && (
-                            <span style={{ fontSize: '12px', color: '#16a34a' }}>✅ Tamamlandı</span>
+                            <span style={{ color: '#10b981', fontSize: '11px' }}>✅ Tamamlandı</span>
                           )}
                         </div>
                       </div>
@@ -397,41 +414,122 @@ export default function AdminPage() {
                   })}
                 </div>
               )}
+
+              {/* Eşleşmemiş kişiler */}
+              {unmatchedUsers.length > 0 && (
+                <div style={{ marginTop: '12px', padding: '10px 14px', background: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#92400e', marginBottom: '4px' }}>⚠️ Eşleşmemiş ({unmatchedUsers.length})</div>
+                  {unmatchedUsers.map(p => (
+                    <div key={p.id} style={{ fontSize: '11px', color: '#a16207' }}>{p.full_name} ({p.company})</div>
+                  ))}
+                </div>
+              )}
+
+              {/* Tüm turlar tamamlandı mesajı */}
+              {allDone && (
+                <div style={{ marginTop: '12px', padding: '10px', background: '#dcfce7', borderRadius: '8px', textAlign: 'center', fontSize: '13px', color: '#166534' }}>
+                  ✅ Tüm görüşmeler tamamlandı! "Sonraki Tur" ile devam edebilirsiniz.
+                </div>
+              )}
             </div>
+
+            {/* Geçmiş Turlar */}
+            {curRound > 1 && (
+              <div style={C}>
+                <h3 style={T}>📜 Geçmiş Turlar</h3>
+                {Array.from({ length: curRound - 1 }, (_, i) => curRound - 1 - i).map(rnd => {
+                  const rndMatches = matches.filter(m => m.round_number === rnd);
+                  return (
+                    <div key={rnd} style={{ marginBottom: '10px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '4px' }}>Tur {rnd}</div>
+                      {rndMatches.map(m => {
+                        const u1 = getUser(m.user1_id);
+                        const u2 = getUser(m.user2_id);
+                        return (
+                          <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', fontSize: '11px', color: '#64748b' }}>
+                            <span>{u1?.full_name || '?'} ↔ {u2?.full_name || '?'}</span>
+                            <span style={{ color: '#10b981' }}>✅</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ═══ EŞLEŞME MATRİSİ ═══ */}
+            {matches.length > 0 && users.length > 0 && (
+              <div style={C}>
+                <h3 style={T}>📊 Eşleşme Matrisi</h3>
+                <p style={{ color: '#94a3b8', fontSize: '11px', margin: '0 0 10px' }}>Kimin kiminle hangi turda görüştüğü</p>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '11px' }}>
+                    <thead>
+                      <tr>
+                        <th style={th}></th>
+                        {users.map(p => (
+                          <th key={p.id} style={{ ...th, writingMode: 'vertical-lr' as any, transform: 'rotate(180deg)', maxWidth: '30px', padding: '8px 4px' }}>
+                            {p.full_name.split(' ')[0]}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const mx = buildMatrix();
+                        return users.map(row => (
+                          <tr key={row.id}>
+                            <td style={{ ...td, fontWeight: '600', whiteSpace: 'nowrap' as any, background: '#f8fafc' }}>
+                              {row.full_name.split(' ')[0]}
+                            </td>
+                            {users.map(col => {
+                              if (row.id === col.id) return <td key={col.id} style={{ ...td, background: '#e2e8f0' }}>—</td>;
+                              const info = mx[row.id]?.[col.id];
+                              if (!info) return <td key={col.id} style={{ ...td, color: '#cbd5e1' }}>✗</td>;
+                              const bg = info.status === 'active' ? '#dbeafe' : info.status === 'pending' ? '#fef3c7' : '#dcfce7';
+                              const clr = info.status === 'active' ? '#1d4ed8' : info.status === 'pending' ? '#92400e' : '#166534';
+                              return (
+                                <td key={col.id} style={{ ...td, background: bg, color: clr, fontWeight: 600 }}>
+                                  T{info.round}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '11px', marginTop: '12px' }}>
+              Bu sayfa 5 saniyede bir otomatik güncelleniyor.
+            </p>
           </>
         )}
-
-        <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '12px', marginTop: '24px' }}>
-          Bu sayfa 5 saniyede bir otomatik güncelleniyor.
-        </p>
       </div>
     </div>
   );
 }
 
+// ─── Components ───
+function StatBox({ label, value, color, icon }: { label: string; value: number; color: string; icon: string }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+      <div style={{ fontSize: '20px', marginBottom: '4px' }}>{icon}</div>
+      <div style={{ fontSize: '24px', fontWeight: '700', color }}>{value}</div>
+      <div style={{ fontSize: '12px', color: '#94a3b8' }}>{label}</div>
+    </div>
+  );
+}
+
 // ─── Styles ───
-const cardStyle: React.CSSProperties = {
-  background: '#fff', borderRadius: '12px', padding: '20px',
-  border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0',
-  fontSize: '14px', outline: 'none', width: '100%', boxSizing: 'border-box',
-};
-
-const btnPrimary: React.CSSProperties = {
-  padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-  background: 'linear-gradient(135deg, #06b6d4, #0891b2)', color: '#fff',
-  fontSize: '14px', fontWeight: 600, whiteSpace: 'nowrap',
-};
-
-const btnDanger: React.CSSProperties = {
-  padding: '10px 20px', borderRadius: '8px', border: '1px solid #fca5a5', cursor: 'pointer',
-  background: '#fef2f2', color: '#991b1b', fontSize: '14px', fontWeight: 600, whiteSpace: 'nowrap',
-};
-
-const btnSmall: React.CSSProperties = {
-  padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', cursor: 'pointer',
-  background: '#fff', color: '#334155', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap',
-};
+const C: React.CSSProperties = { background: '#fff', borderRadius: '14px', padding: '20px', marginBottom: '16px', border: '1px solid #e2e8f0' };
+const T: React.CSSProperties = { fontSize: '15px', fontWeight: '600', color: '#334155', margin: '0 0 12px' };
+const inputStyle: React.CSSProperties = { padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', width: '100%', boxSizing: 'border-box' as const };
+const btnPrimary: React.CSSProperties = { padding: '10px 20px', borderRadius: '10px', border: 'none', fontSize: '14px', fontWeight: '600', cursor: 'pointer', background: '#06b6d4', color: '#fff' };
+const btnDanger: React.CSSProperties = { background: '#fee2e2', border: 'none', borderRadius: '8px', padding: '8px 14px', color: '#dc2626', fontSize: '12px', fontWeight: '600', cursor: 'pointer' };
+const th: React.CSSProperties = { padding: '6px', borderBottom: '1px solid #e2e8f0', textAlign: 'left', fontSize: '11px', color: '#64748b' };
+const td: React.CSSProperties = { padding: '4px 6px', borderBottom: '1px solid #f1f5f9', textAlign: 'center', fontSize: '11px' };
