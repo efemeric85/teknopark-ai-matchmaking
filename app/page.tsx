@@ -61,6 +61,10 @@ export default function HomePage() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.duplicate && data.redirect) {
+          router.push(data.redirect);
+          return;
+        }
         setError(data.error || 'Kayıt sırasında bir hata oluştu.');
         setLoading(false);
         return;
