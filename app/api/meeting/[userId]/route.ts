@@ -12,86 +12,73 @@ export async function GET(
 ) {
   try {
     const identifier = decodeURIComponent(params.userId || '');
-    
     if (!identifier) {
       return NextResponse.json({ error: 'Kullanıcı kimliği gerekli' }, { status: 400 });
     }
-    
+
     const isEmail = identifier.includes('@');
-    
     let user;
-    
+
     if (isEmail) {
       const { data, error } = await supabase
-        .from('users')
-        .select('*')
+        .from('users').select('*')
         .eq('email', identifier)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      
-      if (error || !data) {
-        return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
-      }
+        .limit(1).single();
+      if (error || !data) return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
       user = data;
     } else {
       const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', identifier)
-        .single();
-      
-      if (error || !data) {
-        return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
-      }
+        .from('users').select('*')
+        .eq('id', identifier).single();
+      if (error || !data) return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
       user = data;
     }
 
-    // iki ayrı sorgu ile eşleşmeleri bul (.or() UUID ile sorun çıkarabiliyor)
-    const { data: matchesAsUser1, error: err1 } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('user1_id', user.id);
+    // Event bilgisi
+    const { data: event } = await supabase
+      .from('events').select('id, name, round_duration_sec, status')
+      .eq('id', user.event_id).single();
 
-    const { data: matchesAsUser2, error: err2 } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('user2_id', user.id);
+    // Tüm eşleşmeleri bul
+    const { data: m1 } = await supabase.from('matches').select('*').eq('user1_id', user.id);
+    const { data: m2 } = await supabase.from('matches').select('*').eq('user2_id', user.id);
+    const allMatches = [...(m1 || []), ...(m2 || [])];
 
-    if (err1) console.error('Matches user1 error:', err1);
-    if (err2) console.error('Matches user2 error:', err2);
+    // Mevcut tur = en yüksek round_number
+    const currentRound = allMatches.length > 0
+      ? Math.max(...allMatches.map(m => m.round_number || 1))
+      : 0;
 
-    const allMatches = [...(matchesAsUser1 || []), ...(matchesAsUser2 || [])];
+    // Mevcut turdaki eşleşmeyi bul
+    const currentRoundMatch = allMatches.find(m => (m.round_number || 1) === currentRound);
 
-    // Duplicate kontrolü
-    const uniqueMatches = allMatches.filter((match, index, self) =>
-      index === self.findIndex((m) => m.id === match.id)
-    );
+    let currentMatch = null;
+    if (currentRoundMatch) {
+      const partnerId = currentRoundMatch.user1_id === user.id
+        ? currentRoundMatch.user2_id
+        : currentRoundMatch.user1_id;
 
-    // Partner bilgilerini getir
-    const matchesWithPartners = await Promise.all(
-      uniqueMatches.map(async (match) => {
-        const partnerId = match.user1_id === user.id ? match.user2_id : match.user1_id;
-        
-        const { data: partner } = await supabase
-          .from('users')
-          .select('id, full_name, company, position, current_intent')
-          .eq('id', partnerId)
-          .single();
+      const { data: partner } = await supabase
+        .from('users')
+        .select('id, full_name, company, position, current_intent')
+        .eq('id', partnerId).single();
 
-        return {
-          ...match,
-          partner
-        };
-      })
-    );
+      currentMatch = { ...currentRoundMatch, partner };
+    }
 
     return NextResponse.json({
       user,
-      matches: matchesWithPartners
+      event: event ? {
+        id: event.id,
+        name: event.name,
+        round_duration_sec: event.round_duration_sec || 360
+      } : null,
+      currentRound,
+      currentMatch
     });
   } catch (error: any) {
-    console.error('Error fetching meeting data:', error);
+    console.error('Meeting API error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
