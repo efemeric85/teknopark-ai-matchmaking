@@ -17,13 +17,11 @@ export async function GET(
       return NextResponse.json({ error: 'Kullanıcı kimliği gerekli' }, { status: 400 });
     }
     
-    // Check if identifier is email or UUID
     const isEmail = identifier.includes('@');
     
     let user;
     
     if (isEmail) {
-      // Find user by email
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -37,7 +35,6 @@ export async function GET(
       }
       user = data;
     } else {
-      // Find user by UUID
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -50,20 +47,30 @@ export async function GET(
       user = data;
     }
 
-    // Get matches where user is either user1 or user2
-    const { data: matches, error: matchesError } = await supabase
+    // iki ayrı sorgu ile eşleşmeleri bul (.or() UUID ile sorun çıkarabiliyor)
+    const { data: matchesAsUser1, error: err1 } = await supabase
       .from('matches')
       .select('*')
-      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+      .eq('user1_id', user.id);
 
-    if (matchesError) {
-      console.error('Matches error:', matchesError);
-      throw matchesError;
-    }
+    const { data: matchesAsUser2, error: err2 } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('user2_id', user.id);
 
-    // Get partner info for each match
+    if (err1) console.error('Matches user1 error:', err1);
+    if (err2) console.error('Matches user2 error:', err2);
+
+    const allMatches = [...(matchesAsUser1 || []), ...(matchesAsUser2 || [])];
+
+    // Duplicate kontrolü
+    const uniqueMatches = allMatches.filter((match, index, self) =>
+      index === self.findIndex((m) => m.id === match.id)
+    );
+
+    // Partner bilgilerini getir
     const matchesWithPartners = await Promise.all(
-      (matches || []).map(async (match) => {
+      uniqueMatches.map(async (match) => {
         const partnerId = match.user1_id === user.id ? match.user2_id : match.user1_id;
         
         const { data: partner } = await supabase
