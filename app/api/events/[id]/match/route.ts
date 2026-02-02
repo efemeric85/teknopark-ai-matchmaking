@@ -12,6 +12,7 @@ export async function POST(
 ) {
   try {
     const eventId = params.id;
+    console.log('[MATCH-ROUTE-V3] Creating matches for event:', eventId);
 
     const { data: participants, error: pErr } = await supabase
       .from('users').select('*').eq('event_id', eventId);
@@ -20,7 +21,6 @@ export async function POST(
       return NextResponse.json({ error: 'En az 2 katılımcı gerekli.' }, { status: 400 });
     }
 
-    // Mevcut eşleşmeleri al
     const { data: existingMatches } = await supabase
       .from('matches').select('*').eq('event_id', eventId);
 
@@ -32,12 +32,13 @@ export async function POST(
       const unfinished = (existingMatches || []).filter(m => m.status === 'pending' || m.status === 'active');
       if (unfinished.length > 0) {
         await supabase.from('matches').update({ status: 'completed' }).in('id', unfinished.map(m => m.id));
+        console.log('[MATCH-ROUTE-V3] Auto-completed', unfinished.length, 'old matches');
       }
     }
 
     const newRound = currentMaxRound + 1;
 
-    // Daha önce eşleşmiş çiftleri bul
+    // Daha önce eşleşmiş çiftler
     const previousPairs = new Set<string>();
     if (existingMatches) {
       existingMatches.forEach(m => {
@@ -71,7 +72,7 @@ export async function POST(
       }
     }
 
-    // Fallback: eşleşemeyenler
+    // Fallback
     const unmatched = shuffled.filter(p => !matched.has(p.id));
     for (let i = 0; i < unmatched.length; i += 2) {
       if (i + 1 < unmatched.length) {
@@ -89,13 +90,16 @@ export async function POST(
 
     await supabase.from('events').update({ status: 'active' }).eq('id', eventId);
 
+    console.log('[MATCH-ROUTE-V3] Created', newMatches.length, 'PENDING matches for round', newRound);
+
     return NextResponse.json({
       success: true, round: newRound, matchCount: newMatches.length,
       waitingCount: participants.length - newMatches.length * 2,
+      version: 'V3-PENDING',
       message: `Tur ${newRound}: ${newMatches.length} eşleştirme oluşturuldu. QR okutmayı bekliyor.`,
     });
   } catch (error: any) {
-    console.error('Match error:', error);
+    console.error('[MATCH-ROUTE-V3] Error:', error);
     return NextResponse.json({ error: error.message || 'Eşleştirme hatası.' }, { status: 500 });
   }
 }
