@@ -34,7 +34,6 @@ export default async function ActivatePage({
       title = 'Bu eşleşme tamamlanmış';
       subtitle = 'Bu tur sona erdi.';
     } else {
-      // PENDING → ACTIVE
       const { error } = await supabase
         .from('matches')
         .update({ status: 'active', started_at: new Date().toISOString() })
