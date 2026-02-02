@@ -82,6 +82,22 @@ export default function HomePage() {
 
       const data = await res.json();
 
+      if (!res.ok) {
+        // Zaten kayıtlı kullanıcı
+        if (data.already_registered) {
+          toast({
+            title: "Zaten Kayıtlısınız",
+            description: data.error,
+            variant: "destructive"
+          });
+          setShowEmailLogin(true);
+          setLoginEmail(formData.email);
+        } else {
+          throw new Error(data.error || 'Kayıt başarısız');
+        }
+        return;
+      }
+
       if (data.success && data.user) {
         localStorage.setItem('teknopark_user_id', data.user.id);
         localStorage.setItem('teknopark_user_email', data.user.email);
