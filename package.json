@@ -10,6 +10,7 @@
         "start": "next start"
     },
     "dependencies": {
+        "qrcode": "^1.5.4"
         "qrcode.react": "^3.1.0",
         "@hookform/resolvers": "^5.1.1",
         "@radix-ui/react-accordion": "^1.2.11",
