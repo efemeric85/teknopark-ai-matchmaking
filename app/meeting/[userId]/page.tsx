@@ -25,12 +25,14 @@ export default function MeetingPage() {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [apiVersion, setApiVersion] = useState('');
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch(`/api/meeting/${encodeURIComponent(userId)}`);
       const data = await res.json();
+      if (data.apiVersion) setApiVersion(data.apiVersion);
       if (!res.ok) {
         setError(res.status === 404 ? 'Kullanıcı bulunamadı.' : (data.error || 'Veri alınamadı'));
         return;
@@ -79,6 +81,7 @@ export default function MeetingPage() {
     page: { minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: "'Inter', sans-serif", background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)' },
     card: { background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.1)', padding: '28px', maxWidth: '420px', width: '100%', textAlign: 'center' },
     label: { color: '#94a3b8', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '0 0 4px' },
+    ver: { position: 'fixed' as const, bottom: '4px', right: '8px', color: '#334155', fontSize: '9px' },
   };
 
   if (loading) return <div style={S.page}><div style={S.card}><p style={{ color: '#94a3b8' }}>⏳ Yükleniyor...</p></div></div>;
@@ -87,7 +90,7 @@ export default function MeetingPage() {
     <div style={S.page}><div style={S.card}>
       <p style={{ color: '#f87171', fontSize: '16px' }}>⚠️ {error}</p>
       <a href="/" style={{ display: 'inline-block', marginTop: '16px', padding: '10px 20px', background: '#06b6d4', color: '#fff', borderRadius: '10px', textDecoration: 'none', fontWeight: '600', fontSize: '14px' }}>Ana Sayfaya Dön</a>
-    </div></div>
+    </div><span style={S.ver}>{apiVersion}</span></div>
   );
 
   const header = (
@@ -101,6 +104,8 @@ export default function MeetingPage() {
     </div>
   );
 
+  const versionTag = <span style={S.ver}>{apiVersion} | {match?.status || waiting?.isWaiting ? 'w' : 'none'}</span>;
+
   // Active + expired
   if (match?.status === 'active' && timeLeft !== null && timeLeft <= 0) return (
     <div style={S.page}><div style={S.card}>
@@ -111,7 +116,7 @@ export default function MeetingPage() {
         {partner && <p style={{ color: '#e2e8f0', fontSize: '14px', margin: '0' }}>{partner.full_name} &bull; {partner.company}</p>}
       </div>
       <p style={{ color: '#64748b', fontSize: '12px', marginTop: '12px' }}>Yeni tur başladığında otomatik güncellenecek.</p>
-    </div></div>
+    </div>{versionTag}</div>
   );
 
   // Active + running
@@ -139,7 +144,7 @@ export default function MeetingPage() {
             </div>
           )}
         </div>
-      </div></div>
+      </div>{versionTag}</div>
     );
   }
 
@@ -165,7 +170,7 @@ export default function MeetingPage() {
           </p>
         </div>
         <p style={{ color: '#475569', fontSize: '11px', marginTop: '12px' }}>Tur {match.round_number}</p>
-      </div></div>
+      </div>{versionTag}</div>
     );
   }
 
@@ -219,6 +224,7 @@ export default function MeetingPage() {
         </div>
         <p style={{ color: '#475569', fontSize: '11px', marginTop: '12px' }}>Tur {waiting.roundNumber}</p>
       </div>
+      {versionTag}
       <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }`}</style>
       </div>
     );
@@ -239,6 +245,7 @@ export default function MeetingPage() {
       </div>
       <a href="/" style={{ display: 'inline-block', marginTop: '16px', color: '#64748b', fontSize: '13px', textDecoration: 'none' }}>&larr; Ana Sayfa</a>
     </div>
+    {versionTag}
     <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }`}</style>
     </div>
   );
