@@ -16,6 +16,7 @@ export default function HomePage() {
   const [submitting, setSubmitting] = useState(false);
   const [registered, setRegistered] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -33,8 +34,10 @@ export default function HomePage() {
 
   useEffect(() => {
     const savedUserId = localStorage.getItem('teknopark_user_id');
+    const savedUserEmail = localStorage.getItem('teknopark_user_email');
     if (savedUserId) {
       setUserId(savedUserId);
+      setUserEmail(savedUserEmail);
       setRegistered(true);
     }
     fetchEvents();
@@ -45,19 +48,13 @@ export default function HomePage() {
       setLoading(true);
       const res = await fetch('/api/events');
       const data = await res.json();
-      console.log('API Response:', data);
       
       if (data.events) {
-        // Sadece active statüsündeki etkinlikleri filtrele
         const validEvents = data.events.filter((e: any) => {
           const isActive = e.status?.toLowerCase() === 'active';
-          console.log(`Event: ${e.name}, status: ${e.status}, isActive: ${isActive}, event_date: ${e.event_date}`);
           return isActive;
         });
         
-        console.log('Valid events:', validEvents);
-        
-        // Tarihi olanları önce, olmayanları sonra sırala
         const sortedEvents = validEvents.sort((a: any, b: any) => {
           if (!a.event_date && !b.event_date) return 0;
           if (!a.event_date) return 1;
@@ -65,11 +62,9 @@ export default function HomePage() {
           return new Date(a.event_date).getTime() - new Date(b.event_date).getTime();
         });
         
-        // İlk etkinliği göster
         const nearestEvent = sortedEvents.slice(0, 1);
         setEvents(nearestEvent);
         
-        // Eğer etkinlik varsa otomatik seç
         if (nearestEvent.length > 0) {
           setSelectedEvent(nearestEvent[0].id);
         }
@@ -99,7 +94,9 @@ export default function HomePage() {
 
       if (data.success && data.user) {
         localStorage.setItem('teknopark_user_id', data.user.id);
+        localStorage.setItem('teknopark_user_email', data.user.email);
         setUserId(data.user.id);
+        setUserEmail(data.user.email);
         setRegistered(true);
         toast({
           title: "Kayıt Başarılı! 🎉",
@@ -121,7 +118,9 @@ export default function HomePage() {
 
   const handleLogout = () => {
     localStorage.removeItem('teknopark_user_id');
+    localStorage.removeItem('teknopark_user_email');
     setUserId(null);
+    setUserEmail(null);
     setRegistered(false);
     setShowEmailLogin(true);
     setFormData({
@@ -142,13 +141,14 @@ export default function HomePage() {
       
       if (data.user) {
         localStorage.setItem('teknopark_user_id', data.user.id);
+        localStorage.setItem('teknopark_user_email', data.user.email);
         setUserId(data.user.id);
+        setUserEmail(data.user.email);
         setRegistered(true);
         setShowEmailLogin(false);
-        toast({
-          title: "Giriş Başarılı!",
-          description: "Hoş geldiniz."
-        });
+        
+        // Eşleşme kontrolü yap ve varsa yönlendir
+        window.location.href = `/meeting/${data.user.email}`;
       } else {
         toast({
           title: "Kullanıcı Bulunamadı",
@@ -175,12 +175,10 @@ export default function HomePage() {
       
       if (data.user) {
         localStorage.setItem('teknopark_user_id', data.user.id);
-        setUserId(data.user.id);
-        setRegistered(true);
-        toast({
-          title: "Giriş Başarılı!",
-          description: "Hoş geldiniz."
-        });
+        localStorage.setItem('teknopark_user_email', data.user.email);
+        
+        // Direkt meeting sayfasına yönlendir
+        window.location.href = `/meeting/${data.user.email}`;
       } else {
         toast({
           title: "Kullanıcı Bulunamadı",
@@ -201,57 +199,18 @@ export default function HomePage() {
 
   const selectedEventData = events.find(e => e.id === selectedEvent);
 
-  if (registered && userId) {
+  // Kayıtlı kullanıcı ise direkt meeting sayfasına yönlendir
+  if (registered && userId && userEmail) {
+    // Otomatik yönlendirme
+    if (typeof window !== 'undefined') {
+      window.location.href = `/meeting/${userEmail}`;
+    }
+    
     return (
-      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-blue-50">
-        <div className="container mx-auto px-4 py-8">
-          <div className="max-w-2xl mx-auto">
-            {/* Header */}
-            <div className="text-center mb-8">
-              <img 
-                src="/logo-white.png" 
-                alt="Teknopark Ankara Yapay Zeka Kümelenmesi" 
-                style={{ maxHeight: '250px', width: 'auto' }}
-                className="mx-auto mb-4"
-              />
-              <h1 className="text-3xl font-bold text-gray-900">Kayıt Tamamlandı!</h1>
-              <p className="text-gray-600 mt-2">Eşleştirmeler için bekleyiniz</p>
-            </div>
-
-            {/* Waiting Card */}
-            <Card className="mb-6 border-2 border-cyan-100">
-              <CardContent className="pt-6">
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-4">
-                    <Clock className="w-12 h-12 text-white" />
-                  </div>
-                  <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                    Eşleştirme Bekleniyor
-                  </h2>
-                  <p className="text-gray-600 mb-4">
-                    Organizatör eşleştirmeleri başlattığında bilgilendirileceksiniz.
-                    Bu sayfa otomatik olarak güncellenecektir.
-                  </p>
-                  <div className="w-full max-w-xs">
-                    <Button 
-                      className="w-full bg-cyan-600 hover:bg-cyan-700" 
-                      onClick={() => window.location.href = `/meeting/${userId}`}
-                    >
-                      Eşleşmelerimi Gör
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Actions */}
-            <div className="flex justify-center gap-4">
-              <Button variant="outline" onClick={handleLogout}>
-                Farklı Hesapla Giriş
-              </Button>
-            </div>
-          </div>
+      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-cyan-600" />
+          <p className="text-gray-600">Yönlendiriliyorsunuz...</p>
         </div>
       </div>
     );
