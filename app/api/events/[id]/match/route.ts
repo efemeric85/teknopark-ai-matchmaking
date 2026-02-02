@@ -110,7 +110,7 @@ export async function DELETE(
 ) {
   try {
     await supabase.from('matches').delete().eq('event_id', params.id);
-    await supabase.from('events').update({ status: 'draft' }).eq('id', params.id);
+    
     return NextResponse.json({ success: true, message: 'Tüm eşleşmeler sıfırlandı.' });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
