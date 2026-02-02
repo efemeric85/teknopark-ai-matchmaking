@@ -28,17 +28,16 @@ export async function POST(request: NextRequest) {
     // Check if user already registered for this event
     const { data: existingUser } = await supabase
       .from('users')
-      .select('id')
+      .select('id, email, full_name')
       .eq('email', body.email)
       .eq('event_id', body.event_id)
       .single();
 
     if (existingUser) {
       return NextResponse.json({ 
-        success: true,
-        user: existingUser,
-        message: 'Bu etkinliğe zaten kayıtlısınız.'
-      });
+        error: 'Bu email adresi ile bu etkinliğe zaten kayıt olunmuş. Giriş yapmak için "Giriş Yap" sekmesini kullanın.',
+        already_registered: true
+      }, { status: 409 });
     }
 
     // Create user
@@ -48,7 +47,8 @@ export async function POST(request: NextRequest) {
       company: body.company || null,
       position: body.position || null,
       current_intent: body.current_intent,
-      event_id: body.event_id
+      event_id: body.event_id,
+      checked_in: true
     };
 
     console.log('Creating user with data:', userData);
