@@ -6,7 +6,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// POST: Eşleştir ve başlat (eski eşleşmeler varsa otomatik tamamla)
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -14,39 +13,25 @@ export async function POST(
   try {
     const eventId = params.id;
 
-    // Katılımcıları al
-    const { data: participants, error: participantsError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('event_id', eventId);
-
-    if (participantsError) throw participantsError;
-
+    const { data: participants, error: pErr } = await supabase
+      .from('users').select('*').eq('event_id', eventId);
+    if (pErr) throw pErr;
     if (!participants || participants.length < 2) {
       return NextResponse.json({ error: 'En az 2 katılımcı gerekli.' }, { status: 400 });
     }
 
-    // Mevcut round numarasını bul
+    // Mevcut eşleşmeleri al
     const { data: existingMatches } = await supabase
-      .from('matches')
-      .select('round_number, status, id')
-      .eq('event_id', eventId);
+      .from('matches').select('*').eq('event_id', eventId);
 
     const currentMaxRound = existingMatches && existingMatches.length > 0
-      ? Math.max(...existingMatches.map(m => m.round_number || 1))
-      : 0;
+      ? Math.max(...existingMatches.map(m => m.round_number || 1)) : 0;
 
-    // ÖNCEKİ TAMAMLANMAMIŞ EŞLEŞMELERİ OTOMATİK TAMAMLA
+    // Önceki tamamlanmamış eşleşmeleri otomatik tamamla
     if (currentMaxRound > 0) {
-      const unfinished = (existingMatches || []).filter(
-        m => m.status === 'pending' || m.status === 'active'
-      );
+      const unfinished = (existingMatches || []).filter(m => m.status === 'pending' || m.status === 'active');
       if (unfinished.length > 0) {
-        const unfinishedIds = unfinished.map(m => m.id);
-        await supabase
-          .from('matches')
-          .update({ status: 'completed' })
-          .in('id', unfinishedIds);
+        await supabase.from('matches').update({ status: 'completed' }).in('id', unfinished.map(m => m.id));
       }
     }
 
@@ -54,25 +39,17 @@ export async function POST(
 
     // Daha önce eşleşmiş çiftleri bul
     const previousPairs = new Set<string>();
-    if (existingMatches && existingMatches.length > 0) {
-      const { data: allPrevMatches } = await supabase
-        .from('matches')
-        .select('user1_id, user2_id')
-        .eq('event_id', eventId);
-
-      if (allPrevMatches) {
-        allPrevMatches.forEach(m => {
-          previousPairs.add(`${m.user1_id}-${m.user2_id}`);
-          previousPairs.add(`${m.user2_id}-${m.user1_id}`);
-        });
-      }
+    if (existingMatches) {
+      existingMatches.forEach(m => {
+        previousPairs.add(`${m.user1_id}-${m.user2_id}`);
+        previousPairs.add(`${m.user2_id}-${m.user1_id}`);
+      });
     }
 
-    // Eşleştirme algoritması
+    // Eşleştirme
     const shuffled = [...participants].sort(() => Math.random() - 0.5);
     const matched = new Set<string>();
-    const matches: any[] = [];
-    const now = new Date().toISOString();
+    const newMatches: any[] = [];
 
     for (let i = 0; i < shuffled.length; i++) {
       if (matched.has(shuffled[i].id)) continue;
@@ -80,14 +57,13 @@ export async function POST(
         if (matched.has(shuffled[j].id)) continue;
         const pairKey = `${shuffled[i].id}-${shuffled[j].id}`;
         if (newRound > 1 && previousPairs.has(pairKey)) continue;
-
-        matches.push({
+        newMatches.push({
           event_id: eventId,
           user1_id: shuffled[i].id,
           user2_id: shuffled[j].id,
           round_number: newRound,
-          status: 'active',
-          started_at: now,
+          status: 'pending',
+          started_at: null,
         });
         matched.add(shuffled[i].id);
         matched.add(shuffled[j].id);
@@ -95,56 +71,42 @@ export async function POST(
       }
     }
 
-    // Eşleşemeyenler fallback
+    // Fallback: eşleşemeyenler
     const unmatched = shuffled.filter(p => !matched.has(p.id));
     for (let i = 0; i < unmatched.length; i += 2) {
       if (i + 1 < unmatched.length) {
-        matches.push({
-          event_id: eventId,
-          user1_id: unmatched[i].id,
-          user2_id: unmatched[i + 1].id,
-          round_number: newRound,
-          status: 'active',
-          started_at: now,
+        newMatches.push({
+          event_id: eventId, user1_id: unmatched[i].id, user2_id: unmatched[i + 1].id,
+          round_number: newRound, status: 'pending', started_at: null,
         });
       }
     }
 
-    if (matches.length > 0) {
-      const { error: insertError } = await supabase.from('matches').insert(matches);
-      if (insertError) throw insertError;
+    if (newMatches.length > 0) {
+      const { error: insertErr } = await supabase.from('matches').insert(newMatches);
+      if (insertErr) throw insertErr;
     }
 
     await supabase.from('events').update({ status: 'active' }).eq('id', eventId);
 
-    const waitingNames = shuffled
-      .filter(p => !matched.has(p.id) && !unmatched.slice(0, unmatched.length - (unmatched.length % 2)).find(u => u.id === p.id))
-      .map(p => p.full_name);
-
     return NextResponse.json({
-      success: true,
-      round: newRound,
-      matchCount: matches.length,
-      waitingCount: participants.length - matches.length * 2,
-      message: `Tur ${newRound}: ${matches.length} eşleştirme başlatıldı.`,
+      success: true, round: newRound, matchCount: newMatches.length,
+      waitingCount: participants.length - newMatches.length * 2,
+      message: `Tur ${newRound}: ${newMatches.length} eşleştirme oluşturuldu. QR okutmayı bekliyor.`,
     });
   } catch (error: any) {
-    console.error('Match creation error:', error);
+    console.error('Match error:', error);
     return NextResponse.json({ error: error.message || 'Eşleştirme hatası.' }, { status: 500 });
   }
 }
 
-// DELETE: Tüm eşleşmeleri sıfırla
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const eventId = params.id;
-
-    await supabase.from('matches').delete().eq('event_id', eventId);
-    await supabase.from('events').update({ status: 'draft' }).eq('id', eventId);
-
+    await supabase.from('matches').delete().eq('event_id', params.id);
+    await supabase.from('events').update({ status: 'draft' }).eq('id', params.id);
     return NextResponse.json({ success: true, message: 'Tüm eşleşmeler sıfırlandı.' });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
