@@ -1,49 +1,36 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse, NextRequest } from 'next/server';
+import OpenAI from 'openai';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// ═══════════════════════════════════════════════════
-// Deterministic Round-Robin (Circle Method)
-// N kişi → N-1 tur, her turda N/2 eşleşme garanti
-// Tek sayı → BYE eklenir, her turda 1 kişi bekler
-// ═══════════════════════════════════════════════════
-function getRoundRobinPairings(ids: string[], round: number): [string, string][] {
-  const players = [...ids].sort(); // Deterministik sıralama
-  const hasBye = players.length % 2 !== 0;
-  if (hasBye) players.push('__BYE__');
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-  const n = players.length;
-  const fixed = players[0];
-  const rotating = players.slice(1);
-
-  // Round kadar döndür
-  for (let r = 0; r < round - 1; r++) {
-    rotating.unshift(rotating.pop()!);
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0, magA = 0, magB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    magA += a[i] * a[i];
+    magB += b[i] * b[i];
   }
-
-  const pairs: [string, string][] = [];
-
-  // Sabit kişi vs son eleman
-  if (rotating[rotating.length - 1] !== '__BYE__') {
-    pairs.push([fixed, rotating[rotating.length - 1]]);
-  }
-
-  // Dıştan içe eşleştir
-  const half = Math.floor((n - 2) / 2);
-  for (let i = 0; i < half; i++) {
-    const a = rotating[i];
-    const b = rotating[rotating.length - 2 - i];
-    if (a !== '__BYE__' && b !== '__BYE__') {
-      pairs.push([a, b]);
-    }
-  }
-
-  return pairs;
+  return dot / (Math.sqrt(magA) * Math.sqrt(magB));
 }
+
+const icebreakers = [
+  "Yapay zeka projelerinizde hangi alanlara odaklanıyorsunuz?",
+  "Şirketinizin en büyük teknoloji sorunu ne?",
+  "Bugün burada en çok kimi tanımak isterdiniz?",
+  "Son 6 ayda sizi en çok heyecanlandıran teknoloji ne oldu?",
+  "İş ortağı ararken en çok nelere dikkat ediyorsunuz?",
+  "Sektörünüzde yapay zekanın en büyük etkisi ne olacak?",
+  "Bir startup kursanız hangi problemi çözerdiniz?",
+  "Networking etkinliklerinden en çok ne bekliyorsunuz?",
+  "Şirketinizde otomasyona en çok ihtiyaç duyan süreç hangisi?",
+  "Gelecek 5 yılda sektörünüzü ne değiştirecek?",
+];
 
 export async function POST(
   request: NextRequest,
@@ -51,133 +38,122 @@ export async function POST(
 ) {
   try {
     const eventId = params.id;
-    console.log('[MATCH-ROUTE-V5] Creating matches for event:', eventId);
+    console.log('[MATCH-ROUTE] Event:', eventId);
 
-    // ─── 1. Event ve katılımcıları al ───
+    // ─── 1. Get event ───
     const { data: event } = await supabase
       .from('events').select('*').eq('id', eventId).single();
+    if (!event) {
+      return NextResponse.json({ error: 'Etkinlik bulunamadı.' }, { status: 404 });
+    }
 
-    const { data: participants, error: pError } = await supabase
+    // ─── 2. Get participants ───
+    const { data: users } = await supabase
       .from('users').select('*').eq('event_id', eventId);
-
-    if (pError || !participants || participants.length < 2) {
+    if (!users || users.length < 2) {
       return NextResponse.json({ error: 'En az 2 katılımcı gerekli.' }, { status: 400 });
     }
 
-    const n = participants.length;
-    const maxRounds = n % 2 === 0 ? n - 1 : n;
-    const duration = event?.round_duration_sec || event?.duration || 360;
-
-    // ─── 2. Mevcut eşleşmeleri al ───
+    // ─── 3. Get existing matches to find current round ───
     const { data: existingMatches } = await supabase
-      .from('matches').select('*').eq('event_id', eventId)
-      .order('round_number', { ascending: false });
+      .from('matches').select('*').eq('event_id', eventId);
 
-    const lastRound = existingMatches?.[0]?.round_number || 0;
+    const allMatches = existingMatches || [];
+    const currentRound = allMatches.length > 0
+      ? Math.max(...allMatches.map((m: any) => m.round_number)) + 1
+      : 1;
 
-    // ─── 3. MEVCUT TUR BİTTİ Mİ KONTROLÜ ───
-    if (lastRound > 0 && existingMatches) {
-      const currentRoundMatches = existingMatches.filter(m => m.round_number === lastRound);
-      const now = Date.now();
+    // ─── 4. Build already-matched pairs set ───
+    const matchedPairs = new Set<string>();
+    allMatches.forEach((m: any) => {
+      const key1 = `${m.user1_id}-${m.user2_id}`;
+      const key2 = `${m.user2_id}-${m.user1_id}`;
+      matchedPairs.add(key1);
+      matchedPairs.add(key2);
+    });
 
-      // Süresi dolmuş active match'leri otomatik complete yap
-      const expiredActive = currentRoundMatches.filter(m => {
-        if (m.status !== 'active' || !m.started_at) return false;
-        const elapsed = (now - new Date(m.started_at).getTime()) / 1000;
-        return elapsed >= duration;
-      });
-
-      if (expiredActive.length > 0) {
-        for (const m of expiredActive) {
-          await supabase.from('matches').update({ status: 'completed' }).eq('id', m.id);
+    // ─── 5. Ensure embeddings exist ───
+    for (const user of users) {
+      if (!user.embedding || user.embedding.length === 0) {
+        try {
+          const text = `${user.full_name} - ${user.company} - ${user.position || ''} - ${user.current_intent || ''}`;
+          const resp = await openai.embeddings.create({ model: 'text-embedding-ada-002', input: text });
+          const emb = resp.data[0].embedding;
+          await supabase.from('users').update({ embedding: emb }).eq('id', user.id);
+          user.embedding = emb;
+        } catch (e) {
+          console.error('Embedding error for', user.email, e);
         }
-        console.log('[MATCH-ROUTE-V5] Auto-completed', expiredActive.length, 'expired matches');
-      }
-
-      // Hala devam eden eşleşme var mı?
-      const stillRunning = currentRoundMatches.filter(m => {
-        if (m.status === 'pending') return true;
-        if (m.status === 'active' && m.started_at) {
-          const elapsed = (now - new Date(m.started_at).getTime()) / 1000;
-          return elapsed < duration;
-        }
-        return false;
-      });
-
-      if (stillRunning.length > 0) {
-        const pendingCount = stillRunning.filter(m => m.status === 'pending').length;
-        const activeCount = stillRunning.filter(m => m.status === 'active').length;
-        return NextResponse.json({
-          error: `Tur ${lastRound} henüz tamamlanmadı! ${pendingCount > 0 ? pendingCount + ' çift QR bekliyor. ' : ''}${activeCount > 0 ? activeCount + ' görüşme devam ediyor.' : ''}`.trim(),
-          roundInProgress: true,
-          currentRound: lastRound,
-          pendingCount,
-          activeCount
-        }, { status: 400 });
       }
     }
 
-    // ─── 4. MAX TUR KONTROLÜ ───
-    if (lastRound >= maxRounds) {
-      return NextResponse.json({
-        error: `Tüm turlar tamamlandı! ${n} katılımcı için maksimum ${maxRounds} tur yapılabilir.`,
-        allRoundsCompleted: true,
-        maxRounds,
-        currentRound: lastRound,
-        participantCount: n
-      }, { status: 400 });
+    // ─── 6. Build similarity matrix (only unmatched pairs) ───
+    const candidates: { u1: any; u2: any; score: number }[] = [];
+    for (let i = 0; i < users.length; i++) {
+      for (let j = i + 1; j < users.length; j++) {
+        const pairKey = `${users[i].id}-${users[j].id}`;
+        if (matchedPairs.has(pairKey)) continue;
+
+        let score = 0.5; // default if no embeddings
+        if (users[i].embedding?.length && users[j].embedding?.length) {
+          score = cosineSimilarity(users[i].embedding, users[j].embedding);
+        }
+        candidates.push({ u1: users[i], u2: users[j], score });
+      }
     }
 
-    const newRound = lastRound + 1;
+    // Sort by similarity (highest first)
+    candidates.sort((a, b) => b.score - a.score);
 
-    // ─── 5. Deterministic Round-Robin eşleştirme ───
-    const sortedIds = participants.map(p => p.id).sort();
-    const pairings = getRoundRobinPairings(sortedIds, newRound);
+    // ─── 7. Greedy matching ───
+    const used = new Set<string>();
+    const newMatches: any[] = [];
+    let tableNum = 1;
 
-    const newMatches = pairings.map(([id1, id2]) => ({
-      event_id: eventId,
-      user1_id: id1,
-      user2_id: id2,
-      round_number: newRound,
-      status: 'pending',
-      started_at: null
-    }));
+    for (const c of candidates) {
+      if (used.has(c.u1.id) || used.has(c.u2.id)) continue;
+      used.add(c.u1.id);
+      used.add(c.u2.id);
+
+      newMatches.push({
+        event_id: eventId,
+        user1_id: c.u1.id,
+        user2_id: c.u2.id,
+        round_number: currentRound,
+        table_number: tableNum++,
+        icebreaker_question: icebreakers[Math.floor(Math.random() * icebreakers.length)],
+        status: 'pending',
+        started_at: null,
+      });
+    }
 
     if (newMatches.length === 0) {
-      return NextResponse.json({
-        error: 'Yeni eşleşme yapılamadı. Tüm kombinasyonlar tükenmiş olabilir.',
-        allRoundsCompleted: true,
-        maxRounds,
-        currentRound: lastRound
-      }, { status: 400 });
+      return NextResponse.json({ error: 'Eşleştirilecek yeni çift kalmadı.' }, { status: 400 });
     }
 
-    // ─── 6. Insert ───
-    const { error: insertError } = await supabase
-      .from('matches').insert(newMatches);
+    // ─── 8. Insert matches ───
+    const { error: insertError } = await supabase.from('matches').insert(newMatches);
+    if (insertError) {
+      console.error('[MATCH-ROUTE] Insert error:', insertError);
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
 
-    if (insertError) throw insertError;
-
+    // ─── 9. Update event status ───
     await supabase.from('events').update({ status: 'active' }).eq('id', eventId);
 
-    // Bekleyen kişileri bul
-    const matchedIds = new Set(pairings.flat());
-    const waitingParticipants = participants.filter(p => !matchedIds.has(p.id));
-
-    console.log('[MATCH-ROUTE-V5] Round', newRound, '/', maxRounds, ':', newMatches.length, 'matches,', waitingParticipants.length, 'waiting');
+    const unmatchedCount = users.length - (used.size);
+    console.log('[MATCH-ROUTE] Created', newMatches.length, 'matches. Round:', currentRound, 'Unmatched:', unmatchedCount);
 
     return NextResponse.json({
       success: true,
-      round: newRound,
+      round: currentRound,
       matchCount: newMatches.length,
-      waitingCount: waitingParticipants.length,
-      maxRounds,
-      participantCount: n,
-      version: 'V5-ROUNDROBIN',
-      message: `Tur ${newRound}/${maxRounds}: ${newMatches.length} eşleştirme oluşturuldu.${waitingParticipants.length > 0 ? ' ' + waitingParticipants.length + ' kişi beklemede.' : ''} QR okutmayı bekliyor.`,
+      unmatched: unmatchedCount,
+      message: `Tur ${currentRound}: ${newMatches.length} eşleşme oluşturuldu.${unmatchedCount > 0 ? ` ${unmatchedCount} kişi beklemede.` : ''}`,
     });
+
   } catch (error: any) {
-    console.error('[MATCH-ROUTE-V5] Error:', error);
+    console.error('[MATCH-ROUTE] Error:', error);
     return NextResponse.json({ error: error.message || 'Eşleştirme hatası.' }, { status: 500 });
   }
 }
