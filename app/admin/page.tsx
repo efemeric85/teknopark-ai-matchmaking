@@ -1,685 +1,337 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { 
-  Users, Play, RefreshCw, Plus, Loader2, CheckCircle, 
-  Clock, ArrowLeft, Trash2, Settings, LogOut, Lock, CalendarDays
-} from 'lucide-react';
-
-// Admin credentials - in production, use proper auth
-const ADMIN_CREDENTIALS = {
-  email: 'bahtiyarozturk@gmail.com',
-  password: 'admin123'
-};
-
-interface Event {
-  id: string;
-  name: string;
-  theme: string;
-  status: string;
-  round_duration_sec: number;
-  event_date?: string;
-}
-
-interface User {
-  id: string;
-  full_name: string;
-  company: string;
-  position: string;
-  current_intent: string;
-  checked_in: boolean;
-}
+import { useState, useEffect, useCallback } from 'react';
 
 export default function AdminPage() {
-  // Auth state
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginLoading, setLoginLoading] = useState(false);
-
-  // App state
-  const [events, setEvents] = useState<Event[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [participants, setParticipants] = useState<User[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [participants, setParticipants] = useState<any[]>([]);
+  const [roundData, setRoundData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [matching, setMatching] = useState(false);
-  const { toast } = useToast();
+  const [creatingRound, setCreatingRound] = useState(false);
 
-  // New event form
-  const [showNewEvent, setShowNewEvent] = useState(false);
-  const [newEvent, setNewEvent] = useState({
-    name: '',
-    theme: '',
-    round_duration_sec: 360,
-    event_date: ''
-  });
+  // Event creation
+  const [newName, setNewName] = useState('');
+  const [newDate, setNewDate] = useState('');
+  const [newDuration, setNewDuration] = useState('360');
 
-  useEffect(() => {
-    // Check if already logged in
-    const adminToken = localStorage.getItem('admin_logged_in');
-    if (adminToken === 'true') {
-      setIsLoggedIn(true);
-      fetchEvents();
+  // Events yükle
+  const fetchEvents = async () => {
+    const res = await fetch('/api/events');
+    const data = await res.json();
+    if (data.events) setEvents(data.events);
+  };
+
+  // Katılımcıları yükle
+  const fetchParticipants = useCallback(async (eventId: string) => {
+    const res = await fetch(`/api/events/${eventId}`);
+    const data = await res.json();
+    if (data.event?.participants) setParticipants(data.event.participants);
+  }, []);
+
+  // Tur durumunu yükle
+  const fetchRoundData = useCallback(async (eventId: string) => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/rounds`);
+      const data = await res.json();
+      setRoundData(data);
+    } catch {
+      setRoundData(null);
     }
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginLoading(true);
+  useEffect(() => { fetchEvents(); }, []);
 
-    setTimeout(() => {
-      if (loginEmail === ADMIN_CREDENTIALS.email && loginPassword === ADMIN_CREDENTIALS.password) {
-        localStorage.setItem('admin_logged_in', 'true');
-        setIsLoggedIn(true);
-        fetchEvents();
-        toast({
-          title: "Giriş Başarılı",
-          description: "Hoş geldiniz!"
-        });
-      } else {
-        toast({
-          title: "Giriş Başarısız",
-          description: "Email veya şifre hatalı.",
-          variant: "destructive"
-        });
-      }
-      setLoginLoading(false);
-    }, 500);
-  };
+  // Seçili etkinlik için polling
+  useEffect(() => {
+    if (!selectedEventId) return;
+    fetchParticipants(selectedEventId);
+    fetchRoundData(selectedEventId);
+    const interval = setInterval(() => fetchRoundData(selectedEventId), 8000);
+    return () => clearInterval(interval);
+  }, [selectedEventId, fetchParticipants, fetchRoundData]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('admin_logged_in');
-    setIsLoggedIn(false);
-    setLoginEmail('');
-    setLoginPassword('');
-    setSelectedEvent(null);
-  };
-
-  const fetchEvents = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/events');
-      const data = await res.json();
-      if (data.events) {
-        setEvents(data.events);
-      }
-    } catch (error) {
-      console.error('Error fetching events:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchParticipants = async (eventId: string) => {
-    try {
-      const res = await fetch(`/api/events/${eventId}`);
-      const data = await res.json();
-      if (data.event) {
-        setSelectedEvent(data.event);
-        setParticipants(data.event.participants || []);
-      }
-    } catch (error) {
-      console.error('Error fetching participants:', error);
-    }
-  };
-
+  // Etkinlik oluştur
   const createEvent = async () => {
-    // Tarih zorunlu kontrolü
-    if (!newEvent.event_date) {
-      toast({
-        title: "Hata",
-        description: "Etkinlik tarihi zorunludur.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!newEvent.name) {
-      toast({
-        title: "Hata",
-        description: "Etkinlik adı zorunludur.",
-        variant: "destructive"
-      });
-      return;
-    }
-
+    if (!newName) return;
+    setLoading(true);
     try {
-      const res = await fetch('/api/events', {
+      await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...newEvent,
-          status: 'active'  // Otomatik aktif olsun
+          name: newName,
+          event_date: newDate || null,
+          round_duration_sec: parseInt(newDuration) || 360,
+          status: 'active'
         })
       });
-      const data = await res.json();
-      if (data.event) {
-        setEvents([...events, data.event]);
-        setShowNewEvent(false);
-        setNewEvent({ name: '', theme: '', round_duration_sec: 360, event_date: '' });
-        toast({
-          title: "Etkinlik Oluşturuldu",
-          description: `${data.event.name} etkinliği başarıyla oluşturuldu.`
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Hata",
-        description: "Etkinlik oluşturulamadı.",
-        variant: "destructive"
-      });
-    }
+      setNewName(''); setNewDate(''); setNewDuration('360');
+      fetchEvents();
+    } finally { setLoading(false); }
   };
 
+  // Etkinlik sil
+  const deleteEvent = async (id: string) => {
+    if (!confirm('Bu etkinliği ve tüm verilerini silmek istediğinize emin misiniz?')) return;
+    await fetch(`/api/events/${id}`, { method: 'DELETE' });
+    if (selectedEventId === id) { setSelectedEventId(null); setParticipants([]); setRoundData(null); }
+    fetchEvents();
+  };
+
+  // İlk tur eşleştirme başlat
   const startMatching = async () => {
-    if (!selectedEvent) return;
+    if (!selectedEventId) return;
     setMatching(true);
     try {
-      const res = await fetch(`/api/events/${selectedEvent.id}/match`, {
-        method: 'POST'
+      const res = await fetch('/api/matching', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: selectedEventId })
       });
       const data = await res.json();
-      if (data.success) {
-        toast({
-          title: "Eşleştirme Tamamlandı! 🎉",
-          description: `${data.matchCount} eşleştirme oluşturuldu.`
-        });
-        fetchParticipants(selectedEvent.id);
+      if (data.error) alert('Hata: ' + data.error);
+      else {
+        alert('Eşleştirmeler oluşturuldu!');
+        fetchRoundData(selectedEventId);
+      }
+    } catch (err: any) {
+      alert('Hata: ' + err.message);
+    } finally { setMatching(false); }
+  };
+
+  // Sıradaki turu başlat
+  const startNextRound = async () => {
+    if (!selectedEventId) return;
+    setCreatingRound(true);
+    try {
+      const res = await fetch(`/api/events/${selectedEventId}/rounds`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (data.error) {
+        alert('Hata: ' + data.error);
       } else {
-        throw new Error(data.error);
+        alert(`Tur ${data.round} oluşturuldu! ${data.matchCount} eşleşme, ${data.unmatchedCount} kişi beklemede.`);
+        fetchRoundData(selectedEventId);
       }
-    } catch (error: any) {
-      toast({
-        title: "Hata",
-        description: error.message || "Eşleştirme başlatılamadı.",
-        variant: "destructive"
-      });
-    } finally {
-      setMatching(false);
-    }
+    } catch (err: any) {
+      alert('Hata: ' + err.message);
+    } finally { setCreatingRound(false); }
   };
 
-  const activateEvent = async () => {
-    if (!selectedEvent) return;
-    try {
-      const res = await fetch(`/api/events/${selectedEvent.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'active' })
-      });
-      const data = await res.json();
-      if (data.event) {
-        setSelectedEvent(data.event);
-        fetchEvents();
-        toast({
-          title: "Etkinlik Aktifleştirildi",
-          description: "Katılımcılar artık kaydolabilir."
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Hata",
-        description: "Etkinlik aktifleştirilemedi.",
-        variant: "destructive"
-      });
-    }
-  };
+  const selectedEvent = events.find(e => e.id === selectedEventId);
 
-  const activateEventById = async (eventId: string) => {
-    try {
-      const res = await fetch(`/api/events/${eventId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'active' })
-      });
-      const data = await res.json();
-      if (data.event) {
-        fetchEvents();
-        toast({
-          title: "Etkinlik Aktifleştirildi",
-          description: "Katılımcılar artık kaydolabilir."
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Hata",
-        description: "Etkinlik aktifleştirilemedi.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const deleteEvent = async (eventId: string) => {
-    if (!confirm('Bu etkinliği silmek istediğinize emin misiniz?')) return;
-    
-    try {
-      const res = await fetch(`/api/events/${eventId}`, {
-        method: 'DELETE'
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchEvents();
-        toast({
-          title: "Etkinlik Silindi",
-          description: "Etkinlik başarıyla silindi."
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Hata",
-        description: "Etkinlik silinemedi.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  // Login Screen
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-cyan-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-8 h-8 text-cyan-600" />
-            </div>
-            <CardTitle>Organizatör Girişi</CardTitle>
-            <CardDescription>
-              Yönetim paneline erişmek için giriş yapın
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="admin@teknopark.com"
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Şifre</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <Button 
-                type="submit" 
-                className="w-full bg-cyan-600 hover:bg-cyan-700"
-                disabled={loginLoading}
-              >
-                {loginLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Giriş Yapılıyor...
-                  </>
-                ) : (
-                  'Giriş Yap'
-                )}
-              </Button>
-            </form>
-            <div className="mt-6 text-center">
-              <Button variant="link" onClick={() => window.location.href = '/'}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Ana Sayfaya Dön
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Event Detail View
-  if (selectedEvent) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="container mx-auto px-4 py-8">
-          <div className="max-w-4xl mx-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8">
-              <Button variant="outline" onClick={() => setSelectedEvent(null)}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Geri
-              </Button>
-              <Button variant="outline" onClick={() => fetchParticipants(selectedEvent.id)}>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Yenile
-              </Button>
-            </div>
-
-            {/* Event Info */}
-            <Card className="mb-6">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>{selectedEvent.name}</CardTitle>
-                    <CardDescription>Tema: {selectedEvent.theme || 'Belirtilmemiş'}</CardDescription>
-                    {selectedEvent.event_date && (
-                      <div className="text-sm text-cyan-600 flex items-center gap-1 mt-2">
-                        <CalendarDays className="w-4 h-4" />
-                        {new Date(selectedEvent.event_date).toLocaleDateString('tr-TR', { 
-                          day: 'numeric', 
-                          month: 'long', 
-                          year: 'numeric' 
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  <Badge className={
-                    selectedEvent.status === 'active' ? 'bg-green-500' :
-                    selectedEvent.status === 'completed' ? 'bg-gray-500' : 'bg-yellow-500'
-                  }>
-                    {selectedEvent.status === 'active' ? 'Aktif' :
-                     selectedEvent.status === 'completed' ? 'Tamamlandı' : 'Taslak'}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <Users className="w-6 h-6 text-blue-500 mx-auto mb-2" />
-                    <div className="text-2xl font-bold">{participants.length}</div>
-                    <div className="text-sm text-gray-500">Katılımcı</div>
-                  </div>
-                  <div className="p-4 bg-green-50 rounded-lg">
-                    <CheckCircle className="w-6 h-6 text-green-500 mx-auto mb-2" />
-                    <div className="text-2xl font-bold">
-                      {participants.filter(p => p.checked_in).length}
-                    </div>
-                    <div className="text-sm text-gray-500">Check-in</div>
-                  </div>
-                  <div className="p-4 bg-purple-50 rounded-lg">
-                    <Clock className="w-6 h-6 text-purple-500 mx-auto mb-2" />
-                    <div className="text-2xl font-bold">{Math.floor(selectedEvent.round_duration_sec / 60)} dk</div>
-                    <div className="text-sm text-gray-500">Tur Süresi</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Actions */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Eşleştirme Yönetimi</CardTitle>
-                <CardDescription>
-                  Katılımcıları AI destekli algoritma ile eşleştirin
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-4">
-                  {selectedEvent.status === 'draft' && (
-                    <Button onClick={activateEvent} variant="outline">
-                      <Play className="w-4 h-4 mr-2" />
-                      Etkinliği Aktifleştir
-                    </Button>
-                  )}
-                  <Button 
-                    onClick={startMatching}
-                    disabled={matching || participants.length < 2}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold"
-                  >
-                    {matching ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Eşleştiriliyor...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4 mr-2" />
-                        Eşleştirmeleri Başlat
-                      </>
-                    )}
-                  </Button>
-                  <Button variant="outline">
-                    Yeni Tur Başlat
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Participants List */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Katılımcılar</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {participants.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    Henüz katılımcı yok
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {participants.map((user) => (
-                      <div 
-                        key={user.id}
-                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                      >
-                        <div>
-                          <div className="font-medium">{user.full_name}</div>
-                          <div className="text-sm text-gray-500">
-                            {user.company} • {user.position}
-                          </div>
-                          <div className="text-sm text-cyan-600 mt-1">
-                            "{user.current_intent}"
-                          </div>
-                        </div>
-                        <Badge variant={user.checked_in ? "default" : "outline"}>
-                          {user.checked_in ? '✓ Kayıtlı' : 'Bekliyor'}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Events List View
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Organizatör Paneli</h1>
-              <p className="text-gray-500">Etkinlik ve eşleştirme yönetimi</p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => window.location.href = '/'}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Ana Sayfa
-              </Button>
-              <Button variant="outline" onClick={handleLogout}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Çıkış
-              </Button>
-            </div>
-          </div>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+      {/* Header */}
+      <div style={{ background: '#0f172a', color: 'white', padding: '20px 24px' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: '700', margin: 0 }}>🛠️ Admin Panel</h1>
+        <p style={{ fontSize: '13px', color: '#94a3b8', margin: '4px 0 0' }}>Teknopark AI Networking Yönetimi</p>
+      </div>
 
-          {/* New Event Form */}
-          {showNewEvent && (
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>Yeni Etkinlik Oluştur</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4">
-                  <div className="grid grid-cols-2 gap-4">
+      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '24px 16px' }}>
+
+        {/* Etkinlik Oluştur */}
+        <div style={{ background: 'white', borderRadius: '12px', padding: '20px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>Yeni Etkinlik</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <input placeholder="Etkinlik adı" value={newName} onChange={e => setNewName(e.target.value)}
+              style={inputStyle} />
+            <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
+              style={inputStyle} />
+            <input type="number" placeholder="Süre (saniye)" value={newDuration} onChange={e => setNewDuration(e.target.value)}
+              style={inputStyle} />
+            <button onClick={createEvent} disabled={loading || !newName}
+              style={{ ...btnStyle, background: '#22d3ee', color: '#0f172a' }}>
+              {loading ? 'Oluşturuluyor...' : '+ Etkinlik Oluştur'}
+            </button>
+          </div>
+        </div>
+
+        {/* Etkinlik Listesi */}
+        <div style={{ background: 'white', borderRadius: '12px', padding: '20px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>Etkinlikler</h2>
+          {events.length === 0 && <p style={{ color: '#94a3b8', fontSize: '14px' }}>Henüz etkinlik yok</p>}
+          {events.map(event => (
+            <div key={event.id} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '12px 16px', borderRadius: '8px', marginBottom: '8px',
+              background: selectedEventId === event.id ? '#f0f9ff' : '#f8fafc',
+              border: selectedEventId === event.id ? '2px solid #22d3ee' : '1px solid #e2e8f0',
+              cursor: 'pointer'
+            }}
+              onClick={() => setSelectedEventId(event.id)}
+            >
+              <div>
+                <div style={{ fontWeight: '600', fontSize: '15px' }}>{event.name}</div>
+                <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                  {event.event_date || 'Tarih belirlenmemiş'} &bull; {event.round_duration_sec || 360}s
+                  &bull; {event.status}
+                </div>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); deleteEvent(event.id); }}
+                style={{ background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px' }}>
+                🗑️ Sil
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Seçili Etkinlik Detayı */}
+        {selectedEvent && (
+          <>
+            {/* Katılımcılar */}
+            <div style={{ background: 'white', borderRadius: '12px', padding: '20px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+              <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>
+                👥 Katılımcılar ({participants.length})
+              </h2>
+              {participants.length === 0 && <p style={{ color: '#94a3b8', fontSize: '14px' }}>Henüz katılımcı yok</p>}
+              <div style={{ display: 'grid', gap: '8px' }}>
+                {participants.map((p: any) => (
+                  <div key={p.id} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', fontSize: '14px'
+                  }}>
                     <div>
-                      <Label>Etkinlik Adı *</Label>
-                      <Input
-                        placeholder="Yapay Zeka Zirvesi 2026"
-                        value={newEvent.name}
-                        onChange={(e) => setNewEvent({ ...newEvent, name: e.target.value })}
-                        required
-                      />
+                      <strong>{p.full_name}</strong>
+                      <span style={{ color: '#94a3b8', marginLeft: '8px' }}>{p.company} &bull; {p.position}</span>
                     </div>
-                    <div>
-                      <Label>Tema</Label>
-                      <Input
-                        placeholder="Yapay Zeka"
-                        value={newEvent.theme}
-                        onChange={(e) => setNewEvent({ ...newEvent, theme: e.target.value })}
-                      />
-                    </div>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>{p.email}</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Tur Süresi (saniye)</Label>
-                      <Input
-                        type="number"
-                        value={newEvent.round_duration_sec}
-                        onChange={(e) => setNewEvent({ ...newEvent, round_duration_sec: parseInt(e.target.value) })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Etkinlik Tarihi *</Label>
-                      <Input
-                        type="date"
-                        value={newEvent.event_date}
-                        onChange={(e) => setNewEvent({ ...newEvent, event_date: e.target.value })}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      onClick={createEvent} 
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                      disabled={!newEvent.name || !newEvent.event_date}
-                    >
-                      Oluştur
-                    </Button>
-                    <Button variant="outline" onClick={() => setShowNewEvent(false)}>
-                      İptal
-                    </Button>
+                ))}
+              </div>
+
+              {/* İlk eşleştirme butonu (henüz eşleşme yoksa) */}
+              {(!roundData || roundData.currentRound === 0) && participants.length >= 2 && (
+                <button onClick={startMatching} disabled={matching}
+                  style={{ ...btnStyle, background: '#8b5cf6', color: 'white', width: '100%', marginTop: '16px', padding: '14px' }}>
+                  {matching ? '⏳ Eşleştirme yapılıyor...' : '🤖 AI Eşleştirmeleri Başlat (Tur 1)'}
+                </button>
+              )}
+            </div>
+
+            {/* TUR YÖNETİMİ */}
+            {roundData && roundData.currentRound > 0 && (
+              <div style={{ background: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h2 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>
+                    🎯 Tur {roundData.currentRound} Durumu
+                  </h2>
+                  <div style={{
+                    padding: '4px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: '600',
+                    background: roundData.allCompleted ? '#dcfce7' : '#fef3c7',
+                    color: roundData.allCompleted ? '#16a34a' : '#d97706'
+                  }}>
+                    {roundData.allCompleted ? '✅ Tamamlandı' : '⏱️ Devam Ediyor'}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
 
-          {/* Actions */}
-          <div className="flex gap-4 mb-6">
-            <Button onClick={() => setShowNewEvent(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Plus className="w-4 h-4 mr-2" />
-              Yeni Etkinlik
-            </Button>
-            <Button variant="outline" onClick={fetchEvents}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Yenile
-            </Button>
-          </div>
+                {/* İstatistikler */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                  <StatBox label="Bekleyen" value={roundData.pendingMatches || 0} color="#94a3b8" icon="⏳" />
+                  <StatBox label="Aktif" value={roundData.activeMatches || 0} color="#f59e0b" icon="⏱️" />
+                  <StatBox label="Tamamlanan" value={roundData.completedMatches || 0} color="#22c55e" icon="✅" />
+                </div>
 
-          {/* Events List */}
-          {loading ? (
-            <div className="text-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto text-cyan-500" />
-            </div>
-          ) : events.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Settings className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Henüz etkinlik yok
-                </h3>
-                <p className="text-gray-500 mb-4">
-                  İlk etkinliğinizi oluşturarak başlayın
-                </p>
-                <Button onClick={() => setShowNewEvent(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Etkinlik Oluştur
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {events.map((event) => (
-                <Card 
-                  key={event.id} 
-                  className="hover:border-cyan-300 transition-colors"
-                >
-                  <CardContent className="py-6">
-                    <div className="flex items-center justify-between">
-                      <div 
-                        className="flex-1 cursor-pointer"
-                        onClick={() => fetchParticipants(event.id)}
-                      >
-                        <div className="font-medium text-lg">{event.name}</div>
-                        <div className="text-sm text-gray-500">
-                          Tema: {event.theme || 'Belirtilmemiş'} • Tur: {Math.floor(event.round_duration_sec / 60)} dk
-                        </div>
-                        {event.event_date && (
-                          <div className="text-sm text-cyan-600 flex items-center gap-1 mt-1">
-                            <CalendarDays className="w-3 h-3" />
-                            {new Date(event.event_date).toLocaleDateString('tr-TR', { 
-                              day: 'numeric', 
-                              month: 'long', 
-                              year: 'numeric' 
-                            })}
-                          </div>
-                        )}
+                {/* Eşleşme Listesi */}
+                <div style={{ marginBottom: '20px' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#64748b' }}>
+                    Eşleşmeler ({roundData.totalMatches})
+                  </h3>
+                  {(roundData.matches || []).map((m: any) => (
+                    <div key={m.id} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '10px 14px', borderRadius: '8px', marginBottom: '6px',
+                      background: m.status === 'completed' ? '#f0fdf4' : m.status === 'active' ? '#fffbeb' : '#f8fafc',
+                      border: `1px solid ${m.status === 'completed' ? '#bbf7d0' : m.status === 'active' ? '#fde68a' : '#e2e8f0'}`
+                    }}>
+                      <div style={{ fontSize: '14px' }}>
+                        <strong>{m.user1?.full_name || 'Kullanıcı 1'}</strong>
+                        <span style={{ margin: '0 8px', color: '#94a3b8' }}>↔</span>
+                        <strong>{m.user2?.full_name || 'Kullanıcı 2'}</strong>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {event.status === 'draft' && (
-                          <Button 
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700 text-white"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              activateEventById(event.id);
-                            }}
-                          >
-                            Aktifleştir
-                          </Button>
-                        )}
-                        <Button 
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600 border-red-300 hover:bg-red-50"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteEvent(event.id);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                        <Badge className={
-                          event.status === 'active' ? 'bg-green-500' :
-                          event.status === 'completed' ? 'bg-gray-500' : 'bg-yellow-500'
-                        }>
-                          {event.status === 'active' ? 'Aktif' :
-                           event.status === 'completed' ? 'Tamamlandı' : 'Taslak'}
-                        </Badge>
-                      </div>
+                      <span style={{
+                        fontSize: '12px', fontWeight: '600',
+                        color: m.status === 'completed' ? '#16a34a' : m.status === 'active' ? '#d97706' : '#94a3b8'
+                      }}>
+                        {m.status === 'completed' ? '✅ Tamamlandı' : m.status === 'active' ? '⏱️ Görüşme Devam Ediyor' : '⏳ Bekliyor'}
+                      </span>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+                  ))}
+                </div>
+
+                {/* Sıradaki Tur Butonu */}
+                {roundData.allCompleted && (
+                  <div style={{
+                    background: 'linear-gradient(135deg, #f0fdf4, #ecfdf5)',
+                    borderRadius: '12px', padding: '20px', textAlign: 'center',
+                    border: '2px solid #86efac'
+                  }}>
+                    <div style={{ fontSize: '16px', fontWeight: '600', color: '#16a34a', marginBottom: '12px' }}>
+                      🎉 Tur {roundData.currentRound} tamamlandı!
+                    </div>
+                    <button onClick={startNextRound} disabled={creatingRound}
+                      style={{
+                        ...btnStyle,
+                        background: creatingRound ? '#94a3b8' : '#22c55e',
+                        color: 'white',
+                        padding: '14px 32px',
+                        fontSize: '16px'
+                      }}>
+                      {creatingRound ? '⏳ Oluşturuluyor...' : `🚀 Tur ${roundData.currentRound + 1} Eşleşmelerini Başlat`}
+                    </button>
+                    <p style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>
+                      Katılımcılar otomatik olarak yeni eşleşmelerini görecek
+                    </p>
+                  </div>
+                )}
+
+                {/* Devam ederken uyarı */}
+                {!roundData.allCompleted && (
+                  <div style={{
+                    background: '#fffbeb', borderRadius: '8px', padding: '12px 16px',
+                    fontSize: '13px', color: '#92400e', border: '1px solid #fde68a'
+                  }}>
+                    ⏱️ {roundData.totalMatches - roundData.completedMatches} görüşme devam ediyor. Tüm görüşmeler
+                    bittiğinde yeni tur başlatabilirsiniz. Bu sayfa otomatik güncelleniyor.
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
 }
+
+// Stat Box Component
+function StatBox({ label, value, color, icon }: { label: string; value: number; color: string; icon: string }) {
+  return (
+    <div style={{
+      textAlign: 'center', padding: '14px',
+      background: '#f8fafc', borderRadius: '10px',
+      border: '1px solid #e2e8f0'
+    }}>
+      <div style={{ fontSize: '24px', marginBottom: '4px' }}>{icon}</div>
+      <div style={{ fontSize: '24px', fontWeight: '700', color }}>{value}</div>
+      <div style={{ fontSize: '12px', color: '#94a3b8' }}>{label}</div>
+    </div>
+  );
+}
+
+// Styles
+const inputStyle: React.CSSProperties = {
+  padding: '10px 14px', borderRadius: '8px',
+  border: '1px solid #e2e8f0', fontSize: '14px',
+  outline: 'none', width: '100%', boxSizing: 'border-box'
+};
+
+const btnStyle: React.CSSProperties = {
+  padding: '10px 20px', borderRadius: '8px',
+  border: 'none', fontSize: '14px', fontWeight: '600',
+  cursor: 'pointer', transition: 'opacity 0.2s'
+};
