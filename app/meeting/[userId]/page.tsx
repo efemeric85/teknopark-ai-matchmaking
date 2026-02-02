@@ -1,442 +1,426 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, Users, ArrowLeft, RefreshCw, Building, Briefcase, MessageSquare, QrCode, Play, Pause, RotateCcw } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams } from 'next/navigation';
 
-interface Partner {
-  id: string;
-  full_name: string;
-  company: string;
-  position: string;
-  current_intent: string;
-}
+type PageState = 'loading' | 'no-match' | 'matched' | 'active' | 'completed';
 
-interface Match {
-  id: string;
-  event_id: string;
-  user1_id: string;
-  user2_id: string;
-  round_number: number;
-  status: string;
-  partner: Partner;
-}
-
-interface User {
-  id: string;
-  email: string;
-  full_name: string;
-  company: string;
-  position: string;
-}
-
-function MeetingContent() {
+export default function MeetingPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
-  const identifier = params.userId as string;
-  const shouldStart = searchParams.get('start') === 'true';
-  const matchIdFromUrl = searchParams.get('match');
-  
-  const [user, setUser] = useState<User | null>(null);
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Timer states
-  const [timerRunning, setTimerRunning] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(360); // 6 minutes default
-  const [totalTime, setTotalTime] = useState(360);
-  const [showQR, setShowQR] = useState(false);
-  const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [pendingMatchId, setPendingMatchId] = useState<string | null>(null);
-  const [timerStarted, setTimerStarted] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const userId = decodeURIComponent(params.userId as string);
 
-  const fetchMeetingData = async () => {
+  const [user, setUser] = useState<any>(null);
+  const [eventInfo, setEventInfo] = useState<any>(null);
+  const [currentMatch, setCurrentMatch] = useState<any>(null);
+  const [currentRound, setCurrentRound] = useState(0);
+  const [pageState, setPageState] = useState<PageState>('loading');
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [starting, setStarting] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState('');
+  const [showQR, setShowQR] = useState(true);
+
+  const timerRef = useRef<any>(null);
+  const pollRef = useRef<any>(null);
+  const prevMatchIdRef = useRef<string | null>(null);
+  const hasPlayedSound = useRef(false);
+
+  // Veri çek
+  const fetchData = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
-      
-      const res = await fetch(`/api/meeting/${encodeURIComponent(identifier)}`);
+      const res = await fetch(`/api/meeting/${encodeURIComponent(userId)}`);
+      if (!res.ok) return;
       const data = await res.json();
-      
-      if (data.error) {
-        setError(data.error);
+
+      if (!data.user) return;
+      setUser(data.user);
+      if (data.event) setEventInfo(data.event);
+      setCurrentRound(data.currentRound || 0);
+
+      const match = data.currentMatch;
+
+      if (!match) {
+        setPageState('no-match');
+        setCurrentMatch(null);
         return;
       }
-      
-      setUser(data.user);
-      setMatches(data.matches || []);
-      
-      // Auto-start timer if URL has start=true
-      if (shouldStart && !timerStarted && data.matches && data.matches.length > 0) {
-        const matchToStart = matchIdFromUrl 
-          ? data.matches.find((m: Match) => m.id === matchIdFromUrl) 
-          : data.matches[0];
-        
-        if (matchToStart) {
-          // QR okutuldu, onay iste
-          setPendingMatchId(matchToStart.id);
-          setShowConfirm(true);
+
+      // Yeni tur algıla
+      if (match.id !== prevMatchIdRef.current) {
+        prevMatchIdRef.current = match.id;
+        setShowQR(true);
+        hasPlayedSound.current = false;
+      }
+
+      setCurrentMatch(match);
+
+      if (match.status === 'completed') {
+        setPageState('completed');
+      } else if (match.status === 'active' && match.started_at) {
+        setPageState('active');
+      } else {
+        setPageState('matched');
+      }
+    } catch (err) {
+      console.error('Fetch error:', err);
+    }
+  }, [userId]);
+
+  // 5 saniyede bir polling
+  useEffect(() => {
+    fetchData();
+    pollRef.current = setInterval(fetchData, 5000);
+    return () => clearInterval(pollRef.current);
+  }, [fetchData]);
+
+  // Timer countdown
+  useEffect(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    if (pageState !== 'active' || !currentMatch?.started_at || !eventInfo) return;
+
+    const duration = (eventInfo.round_duration_sec || 360) * 1000;
+    const endTime = new Date(currentMatch.started_at).getTime() + duration;
+
+    const tick = () => {
+      const remaining = Math.max(0, endTime - Date.now());
+      setTimeLeft(remaining);
+
+      if (remaining <= 0) {
+        setPageState('completed');
+        fetch(`/api/matches/${currentMatch.id}/complete`, { method: 'POST' }).catch(() => {});
+        clearInterval(timerRef.current);
+        // Bip sesi
+        if (!hasPlayedSound.current) {
+          hasPlayedSound.current = true;
+          playEndSound();
         }
       }
-    } catch (err: any) {
-      setError('Veriler yüklenirken hata oluştu');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (identifier) {
-      fetchMeetingData();
-    }
-  }, [identifier]);
-
-  // Timer effect
-  useEffect(() => {
-    if (timerRunning && timeLeft > 0) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            setTimerRunning(false);
-            // Play sound when timer ends
-            if (audioRef.current) {
-              audioRef.current.play();
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
     };
-  }, [timerRunning]);
 
-  const startTimer = (matchId: string) => {
-    setActiveMatchId(matchId);
-    setTimeLeft(totalTime);
-    setTimerRunning(true);
-    setTimerStarted(true);
-    setShowQR(false);
-    setShowConfirm(false);
-    setPendingMatchId(null);
-  };
+    tick();
+    timerRef.current = setInterval(tick, 1000);
+    return () => clearInterval(timerRef.current);
+  }, [pageState, currentMatch?.started_at, currentMatch?.id, eventInfo]);
 
-  const confirmStart = () => {
-    if (pendingMatchId) {
-      startTimer(pendingMatchId);
+  // QR oluştur
+  useEffect(() => {
+    if (!currentMatch || typeof window === 'undefined') return;
+    const url = `${window.location.origin}/start/${currentMatch.id}`;
+    generateQR(url).then(setQrDataUrl);
+  }, [currentMatch?.id]);
+
+  const handleStart = async () => {
+    if (!currentMatch || starting) return;
+    setStarting(true);
+    try {
+      await fetch(`/api/matches/${currentMatch.id}/start`, { method: 'POST' });
+      await fetchData();
+    } finally {
+      setStarting(false);
     }
   };
 
-  const cancelStart = () => {
-    setShowConfirm(false);
-    setPendingMatchId(null);
-  };
-
-  const pauseTimer = () => {
-    setTimerRunning(false);
-  };
-
-  const resumeTimer = () => {
-    setTimerRunning(true);
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const getTimerColor = () => {
-    const percentage = (timeLeft / totalTime) * 100;
-    if (percentage > 50) return 'text-green-600';
-    if (percentage > 25) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  // QR kod partnerin sayfasına yönlendirir ve sayacı başlatır
-  const activeMatch = matches.find(m => m.id === activeMatchId) || matches[0];
-  const qrValue = activeMatch?.partner 
-    ? `https://atyzk.vercel.app/meeting/${activeMatch.partner.id}?start=true&match=${activeMatch.id}`
-    : '';
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-cyan-600" />
-          <p className="text-gray-600">Yükleniyor...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">{error}</p>
-          <Button onClick={() => window.location.href = '/'}>
-            Ana Sayfaya Dön
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  // Helpers
+  const minutes = Math.floor(timeLeft / 60000);
+  const seconds = Math.floor((timeLeft % 60000) / 1000);
+  const totalDuration = eventInfo ? eventInfo.round_duration_sec * 1000 : 360000;
+  const progress = totalDuration > 0 ? (timeLeft / totalDuration) * 100 : 0;
+  const timerColor = timeLeft < 30000 ? '#ef4444' : timeLeft < 120000 ? '#f59e0b' : '#22c55e';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Audio for timer end */}
-      <audio ref={audioRef} src="/timer-end.mp3" />
-      
-      {/* Confirmation Modal */}
-      {showConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-sm">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-                  <Play className="w-8 h-8 text-red-600" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Görüşmeyi Başlat</h3>
-                <p className="text-gray-600 mb-6">
-                  6 dakikalık görüşme sayacı başlayacak. Emin misiniz?
-                </p>
-                <div className="flex gap-3">
-                  <Button 
-                    variant="outline" 
-                    className="flex-1"
-                    onClick={cancelStart}
-                  >
-                    İptal
-                  </Button>
-                  <Button 
-                    variant="outline"
-                    style={{ color: '#dc2626', borderColor: '#dc2626' }}
-                    className="flex-1 font-bold bg-white hover:bg-red-50"
-                    onClick={confirmStart}
-                  >
-                    EVET, BAŞLAT
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+      color: 'white',
+      fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      padding: '20px 16px'
+    }}>
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: '24px', width: '100%', maxWidth: '440px' }}>
+        <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '2px', marginBottom: '4px' }}>
+          Teknopark Ankara
+        </div>
+        <div style={{ fontSize: '18px', fontWeight: '700', color: '#22d3ee' }}>
+          AI Networking
+        </div>
+      </div>
+
+      {/* User Info */}
+      {user && (
+        <div style={{
+          background: 'rgba(255,255,255,0.05)',
+          borderRadius: '12px',
+          padding: '12px 20px',
+          marginBottom: '20px',
+          width: '100%',
+          maxWidth: '440px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '16px', fontWeight: '600' }}>{user.full_name}</div>
+          <div style={{ fontSize: '13px', color: '#94a3b8' }}>{user.company} &bull; {user.position}</div>
         </div>
       )}
-      
-      {/* Header */}
-      <div className="bg-white border-b px-4 py-4">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Eşleşmelerim</h1>
-            <p className="text-sm text-gray-500">Tüm görüşme eşleşmeleriniz</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => window.location.href = '/'}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Geri
-            </Button>
-            <Button onClick={fetchMeetingData} className="bg-cyan-600 hover:bg-cyan-700">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Yenile
-            </Button>
-          </div>
-        </div>
-      </div>
 
-      {/* Content */}
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        {/* Active Timer Card */}
-        {activeMatchId && (
-          <Card className="mb-6 border-2 border-cyan-500 bg-gradient-to-br from-cyan-50 to-blue-50">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-sm text-gray-600 mb-2">
-                  {matches.find(m => m.id === activeMatchId)?.partner?.full_name} ile görüşme
-                </p>
-                <div className={`text-6xl font-mono font-bold mb-4 ${getTimerColor()}`}>
-                  {formatTime(timeLeft)}
-                </div>
-                <div className="flex justify-center gap-3 mb-4">
-                  {!timerRunning && timeLeft > 0 && timeLeft < totalTime && (
-                    <Button onClick={resumeTimer} className="bg-green-600 hover:bg-green-700">
-                      <Play className="w-4 h-4 mr-2" />
-                      Devam
-                    </Button>
-                  )}
-                  {timerRunning && (
-                    <Button onClick={pauseTimer} variant="outline">
-                      <Pause className="w-4 h-4 mr-2" />
-                      Duraklat
-                    </Button>
-                  )}
-                </div>
-                {timeLeft === 0 && (
-                  <div className="text-red-600 font-semibold text-lg animate-pulse">
-                    ⏰ Süre Doldu!
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+      {/* Round Indicator */}
+      {currentRound > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          marginBottom: '20px', color: '#94a3b8', fontSize: '13px'
+        }}>
+          <div style={{ width: '40px', height: '1px', background: '#334155' }} />
+          <span>Tur {currentRound}</span>
+          <div style={{ width: '40px', height: '1px', background: '#334155' }} />
+        </div>
+      )}
+
+      {/* CONTENT AREA */}
+      <div style={{ width: '100%', maxWidth: '440px' }}>
+
+        {/* LOADING */}
+        {pageState === 'loading' && (
+          <div style={{ textAlign: 'center', padding: '60px 0' }}>
+            <div style={{ fontSize: '32px', marginBottom: '16px', animation: 'spin 1s linear infinite' }}>⏳</div>
+            <div style={{ color: '#94a3b8' }}>Yükleniyor...</div>
+          </div>
         )}
 
-        {/* User Info */}
-        {user && (
-          <Card className="mb-6 border-cyan-200 bg-cyan-50">
-            <CardContent className="pt-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-cyan-600 flex items-center justify-center text-white font-bold text-lg">
-                    {user.full_name?.charAt(0) || '?'}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">{user.full_name}</p>
-                    <p className="text-sm text-gray-600">{user.company} • {user.position}</p>
-                  </div>
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setShowQR(!showQR)}
-                >
-                  <QrCode className="w-4 h-4 mr-2" />
-                  QR Kodum
-                </Button>
+        {/* NO MATCH */}
+        {pageState === 'no-match' && (
+          <div style={{
+            textAlign: 'center', padding: '60px 20px',
+            background: 'rgba(255,255,255,0.03)',
+            borderRadius: '16px',
+            border: '1px dashed #334155'
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>⏳</div>
+            <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>Henüz eşleşme yok</div>
+            <div style={{ color: '#94a3b8', fontSize: '14px', lineHeight: '1.6' }}>
+              Organizatör eşleştirmeleri başlattığında<br />burada görünecek
+            </div>
+            <div style={{ marginTop: '20px' }}>
+              <div className="pulse-dot" style={{
+                width: '8px', height: '8px', borderRadius: '50%',
+                background: '#22d3ee', margin: '0 auto',
+                animation: 'pulse 2s ease-in-out infinite'
+              }} />
+            </div>
+          </div>
+        )}
+
+        {/* MATCHED - Bekliyor */}
+        {pageState === 'matched' && currentMatch?.partner && (
+          <>
+            {/* Partner Card */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(34,211,238,0.1), rgba(59,130,246,0.1))',
+              borderRadius: '16px',
+              padding: '20px',
+              marginBottom: '20px',
+              border: '1px solid rgba(34,211,238,0.2)'
+            }}>
+              <div style={{ fontSize: '12px', color: '#22d3ee', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>
+                Eşleşmeniz
               </div>
-              
-              {/* QR Code Display */}
-              {showQR && qrValue && (
-                <div className="mt-4 p-4 bg-white rounded-lg text-center">
-                  <QRCodeSVG 
-                    value={qrValue}
-                    size={200}
-                    className="mx-auto"
-                  />
-                  <p className="text-sm text-gray-500 mt-2">
-                    Eşleştiğiniz kişi bu QR'ı okutunca sayaç başlar
-                  </p>
+              <div style={{ fontSize: '20px', fontWeight: '700', marginBottom: '8px' }}>
+                {currentMatch.partner.full_name}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '14px', color: '#cbd5e1' }}>
+                <div>🏢 {currentMatch.partner.company}</div>
+                <div>💼 {currentMatch.partner.position}</div>
+              </div>
+              {currentMatch.partner.current_intent && (
+                <div style={{
+                  marginTop: '12px', padding: '10px 14px',
+                  background: 'rgba(0,0,0,0.2)', borderRadius: '8px',
+                  fontSize: '13px', color: '#94a3b8', fontStyle: 'italic', lineHeight: '1.5'
+                }}>
+                  &ldquo;{currentMatch.partner.current_intent}&rdquo;
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+
+            {/* QR Code */}
+            {showQR && qrDataUrl && (
+              <div style={{
+                background: 'white', borderRadius: '16px',
+                padding: '20px', marginBottom: '20px', textAlign: 'center'
+              }}>
+                <img src={qrDataUrl} alt="QR" style={{ width: '220px', height: '220px', margin: '0 auto' }} />
+                <div style={{ color: '#475569', fontSize: '13px', marginTop: '8px' }}>
+                  Partneriniz bu QR'ı okutarak görüşmeyi başlatabilir
+                </div>
+              </div>
+            )}
+
+            {/* Başlat Butonu */}
+            <button
+              onClick={handleStart}
+              disabled={starting}
+              style={{
+                width: '100%', padding: '18px',
+                background: starting ? '#475569' : 'linear-gradient(135deg, #22d3ee, #3b82f6)',
+                border: 'none', borderRadius: '14px',
+                color: 'white', fontSize: '18px', fontWeight: '700',
+                cursor: starting ? 'not-allowed' : 'pointer',
+                transition: 'transform 0.1s',
+                boxShadow: '0 4px 20px rgba(34,211,238,0.3)'
+              }}
+            >
+              {starting ? '⏳ Başlatılıyor...' : '🚀 GÖRÜŞMEYI BAŞLAT'}
+            </button>
+
+            <div style={{ textAlign: 'center', fontSize: '12px', color: '#64748b', marginTop: '12px' }}>
+              veya partnerinizin QR kodunu okutun
+            </div>
+          </>
         )}
 
-        {/* Matches */}
-        {matches.length === 0 ? (
-          <Card className="border-2 border-dashed border-gray-300">
-            <CardContent className="py-12">
-              <div className="text-center">
-                <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h2 className="text-xl font-semibold text-gray-700 mb-2">Henüz eşleşme yok</h2>
-                <p className="text-gray-500">
-                  Organizatör eşleştirmeleri başlattığında burada görünecek
-                </p>
+        {/* ACTIVE - Timer */}
+        {pageState === 'active' && currentMatch && (
+          <>
+            {/* Timer Display */}
+            <div style={{
+              textAlign: 'center', padding: '30px 20px',
+              background: 'rgba(0,0,0,0.3)',
+              borderRadius: '20px',
+              marginBottom: '20px',
+              border: `2px solid ${timerColor}40`
+            }}>
+              <div style={{
+                fontSize: '72px',
+                fontWeight: '800',
+                fontFamily: "'Courier New', monospace",
+                color: timerColor,
+                textShadow: `0 0 30px ${timerColor}40`,
+                lineHeight: '1',
+                marginBottom: '16px',
+                animation: timeLeft < 30000 ? 'pulse 1s ease-in-out infinite' : 'none'
+              }}>
+                {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
               </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Users className="w-5 h-5 text-cyan-600" />
-              Görüşme Eşleşmeleriniz ({matches.length})
-            </h2>
-            
-            {matches.map((match) => (
-              <Card 
-                key={match.id} 
-                className={`border-2 transition-colors ${
-                  activeMatchId === match.id 
-                    ? 'border-cyan-500 bg-cyan-50' 
-                    : 'border-cyan-100 hover:border-cyan-300'
-                }`}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold">
-                        {match.partner?.full_name?.charAt(0) || '?'}
-                      </div>
-                      {match.partner?.full_name || 'Bilinmeyen Kullanıcı'}
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                        Tur {match.round_number}
-                      </span>
-                      {activeMatchId !== match.id && shouldStart && (
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => {
-                            setPendingMatchId(match.id);
-                            setShowConfirm(true);
-                          }}
-                          style={{ color: '#dc2626', borderColor: '#dc2626' }}
-                          className="font-bold bg-white hover:bg-red-50"
-                        >
-                          <Play className="w-4 h-4 mr-1" style={{ color: '#dc2626' }} />
-                          BAŞLAT
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {match.partner && (
-                    <div className="space-y-2 text-sm">
-                      {match.partner.company && (
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <Building className="w-4 h-4" />
-                          <span>{match.partner.company}</span>
-                        </div>
-                      )}
-                      {match.partner.position && (
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <Briefcase className="w-4 h-4" />
-                          <span>{match.partner.position}</span>
-                        </div>
-                      )}
-                      {match.partner.current_intent && (
-                        <div className="flex items-start gap-2 text-gray-600 mt-3 p-3 bg-gray-50 rounded-lg">
-                          <MessageSquare className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                          <span className="italic">"{match.partner.current_intent}"</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+
+              {/* Progress Bar */}
+              <div style={{
+                width: '100%', height: '6px',
+                background: 'rgba(255,255,255,0.1)',
+                borderRadius: '3px', overflow: 'hidden'
+              }}>
+                <div style={{
+                  width: `${progress}%`, height: '100%',
+                  background: timerColor,
+                  borderRadius: '3px',
+                  transition: 'width 1s linear'
+                }} />
+              </div>
+            </div>
+
+            {/* Partner Info (compact) */}
+            {currentMatch.partner && (
+              <div style={{
+                background: 'rgba(255,255,255,0.05)',
+                borderRadius: '12px',
+                padding: '16px',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '16px', fontWeight: '600' }}>
+                  {currentMatch.partner.full_name}
+                </div>
+                <div style={{ fontSize: '13px', color: '#94a3b8' }}>
+                  {currentMatch.partner.company} &bull; {currentMatch.partner.position}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* COMPLETED */}
+        {pageState === 'completed' && (
+          <div style={{
+            textAlign: 'center', padding: '50px 20px',
+            background: 'rgba(34,197,94,0.05)',
+            borderRadius: '16px',
+            border: '1px solid rgba(34,197,94,0.2)'
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
+            <div style={{ fontSize: '20px', fontWeight: '700', marginBottom: '12px', color: '#22c55e' }}>
+              Görüşmeniz bitmiştir
+            </div>
+            <div style={{ color: '#94a3b8', fontSize: '15px', lineHeight: '1.6', marginBottom: '24px' }}>
+              Lütfen diğer katılımcılarla<br />eşleşmek için bekleyiniz
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22d3ee', animation: 'bounce 1.4s ease-in-out infinite' }} />
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22d3ee', animation: 'bounce 1.4s ease-in-out 0.2s infinite' }} />
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22d3ee', animation: 'bounce 1.4s ease-in-out 0.4s infinite' }} />
+            </div>
           </div>
         )}
       </div>
+
+      {/* Geri Butonu */}
+      <div style={{ marginTop: '30px' }}>
+        <a href="/" style={{
+          color: '#64748b', fontSize: '13px', textDecoration: 'none',
+          display: 'flex', alignItems: 'center', gap: '4px'
+        }}>
+          ← Ana Sayfa
+        </a>
+      </div>
+
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.02); }
+        }
+        @keyframes bounce {
+          0%, 80%, 100% { transform: translateY(0); }
+          40% { transform: translateY(-8px); }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
 
-export default function MeetingPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-cyan-600" />
-          <p className="text-gray-600">Yükleniyor...</p>
-        </div>
-      </div>
-    }>
-      <MeetingContent />
-    </Suspense>
-  );
+// QR Code üreteci (qrcode paketi ile)
+async function generateQR(text: string): Promise<string> {
+  try {
+    const QRCode = (await import('qrcode')).default;
+    return await QRCode.toDataURL(text, {
+      width: 250,
+      margin: 2,
+      color: { dark: '#0f172a', light: '#ffffff' }
+    });
+  } catch {
+    // qrcode paketi yoksa external API kullan
+    return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(text)}`;
+  }
+}
+
+// Bip sesi
+function playEndSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const playBeep = (freq: number, delay: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      gain.gain.value = 0.3;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.2);
+    };
+    playBeep(880, 0);
+    playBeep(880, 0.3);
+    playBeep(1320, 0.6);
+  } catch {}
 }
