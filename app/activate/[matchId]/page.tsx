@@ -13,119 +13,133 @@ export default async function ActivatePage({
   params: { matchId: string };
 }) {
   const matchId = params.matchId;
-  let title = '';
-  let subtitle = '';
-  let icon = '⚠️';
-  let color = '#f59e0b';
+
   let user1: any = null;
   let user2: any = null;
-  let activated = false;
+  let matchStatus: string | null = null;
+  let errorMsg: string | null = null;
 
   try {
     const { data: match } = await supabase
       .from('matches').select('*').eq('id', matchId).single();
 
     if (!match) {
-      title = 'Eşleşme bulunamadı';
-      subtitle = 'Bu QR kod geçersiz veya süresi dolmuş olabilir.';
-    } else if (match.status === 'active') {
-      title = 'Eşleşme zaten başlamış!';
-      subtitle = 'Sayaç çoktan çalışıyor. Sayfanıza dönün.';
-      icon = '✅';
-      color = '#10b981';
-      activated = true;
-
-      // Fetch both users for links
-      const { data: u1 } = await supabase.from('users').select('*').eq('id', match.user1_id).single();
-      const { data: u2 } = await supabase.from('users').select('*').eq('id', match.user2_id).single();
-      user1 = u1;
-      user2 = u2;
-    } else if (match.status === 'completed') {
-      title = 'Bu eşleşme tamamlanmış';
-      subtitle = 'Bu tur sona erdi.';
+      errorMsg = 'Bu QR kod geçersiz veya süresi dolmuş olabilir.';
     } else {
-      // PENDING → ACTIVE
-      const { error } = await supabase
-        .from('matches')
-        .update({ status: 'active', started_at: new Date().toISOString() })
-        .eq('id', matchId)
-        .eq('status', 'pending');
-
-      if (error) throw error;
-
-      title = 'Eşleşme Başlatıldı!';
-      subtitle = 'Sayaç başladı. Aşağıdan sayfanıza gidin.';
-      icon = '🚀';
-      color = '#06b6d4';
-      activated = true;
-
-      // Fetch both users for links
+      matchStatus = match.status;
       const { data: u1 } = await supabase.from('users').select('*').eq('id', match.user1_id).single();
       const { data: u2 } = await supabase.from('users').select('*').eq('id', match.user2_id).single();
       user1 = u1;
       user2 = u2;
     }
   } catch (err: any) {
-    title = 'Bir hata oluştu';
-    subtitle = err.message || 'Lütfen tekrar deneyin.';
-    icon = '❌';
-    color = '#ef4444';
+    errorMsg = err.message || 'Bir hata oluştu.';
   }
 
-  return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
-      fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: '20px',
-    }}>
-      <div style={{
-        background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)',
-        borderRadius: '24px', border: '1px solid rgba(255,255,255,0.1)',
-        padding: '48px 32px', maxWidth: '400px', width: '100%', textAlign: 'center' as const,
-      }}>
-        <div style={{ fontSize: '64px', marginBottom: '16px' }}>{icon}</div>
-        <h1 style={{ color: color, fontSize: '24px', fontWeight: '700', margin: '0 0 12px' }}>{title}</h1>
-        <p style={{ color: '#94a3b8', fontSize: '15px', margin: '0 0 24px', lineHeight: '1.5' }}>{subtitle}</p>
+  // ─── ERROR ───
+  if (errorMsg) {
+    return (
+      <div style={pageStyle}>
+        <div style={cardStyle}>
+          <div style={{ fontSize: '64px', marginBottom: '16px' }}>⚠️</div>
+          <h1 style={{ color: '#f59e0b', fontSize: '24px', fontWeight: '700', margin: '0 0 12px' }}>Eşleşme bulunamadı</h1>
+          <p style={{ color: '#94a3b8', fontSize: '15px', margin: 0 }}>{errorMsg}</p>
+        </div>
+      </div>
+    );
+  }
 
-        {/* User links to meeting pages */}
-        {activated && user1 && user2 && (
-          <div style={{ marginBottom: '24px' }}>
-            <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 12px', textTransform: 'uppercase' as const, letterSpacing: '1px' }}>
-              Sayfanıza gidin:
-            </p>
-            <a
-              href={`/meeting/${encodeURIComponent(user1.email)}`}
-              style={{
-                display: 'block', padding: '14px 20px', marginBottom: '10px',
-                background: 'linear-gradient(135deg, rgba(6,182,212,0.2), rgba(59,130,246,0.15))',
-                border: '1px solid rgba(6,182,212,0.3)', borderRadius: '12px',
-                color: '#fff', textDecoration: 'none', fontSize: '16px', fontWeight: '600',
-              }}
-            >
+  // ─── ALREADY ACTIVE OR COMPLETED ───
+  if (matchStatus === 'active' || matchStatus === 'completed') {
+    const statusText = matchStatus === 'active' ? 'Eşleşme zaten başlamış!' : 'Bu eşleşme tamamlanmış.';
+    const statusIcon = matchStatus === 'active' ? '✅' : '⏰';
+    const statusColor = matchStatus === 'active' ? '#10b981' : '#94a3b8';
+
+    return (
+      <div style={pageStyle}>
+        <div style={cardStyle}>
+          <div style={{ fontSize: '64px', marginBottom: '16px' }}>{statusIcon}</div>
+          <h1 style={{ color: statusColor, fontSize: '24px', fontWeight: '700', margin: '0 0 12px' }}>{statusText}</h1>
+          <p style={{ color: '#94a3b8', fontSize: '15px', margin: '0 0 24px' }}>Sayfanıza dönün:</p>
+          {user1 && (
+            <a href={`/meeting/${encodeURIComponent(user1.email)}`} style={linkStyle}>
               {user1.full_name}
-              <span style={{ display: 'block', color: '#06b6d4', fontSize: '12px', marginTop: '2px' }}>
-                {user1.company}
-              </span>
+              <span style={linkSubStyle}>{user1.company}</span>
             </a>
-            <a
-              href={`/meeting/${encodeURIComponent(user2.email)}`}
-              style={{
-                display: 'block', padding: '14px 20px',
-                background: 'linear-gradient(135deg, rgba(6,182,212,0.2), rgba(59,130,246,0.15))',
-                border: '1px solid rgba(6,182,212,0.3)', borderRadius: '12px',
-                color: '#fff', textDecoration: 'none', fontSize: '16px', fontWeight: '600',
-              }}
-            >
+          )}
+          {user2 && (
+            <a href={`/meeting/${encodeURIComponent(user2.email)}`} style={{...linkStyle, marginTop: '10px'}}>
               {user2.full_name}
-              <span style={{ display: 'block', color: '#06b6d4', fontSize: '12px', marginTop: '2px' }}>
-                {user2.company}
-              </span>
+              <span style={linkSubStyle}>{user2.company}</span>
             </a>
-          </div>
+          )}
+          <p style={footerStyle}>TEKNOPARK ANKARA</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── PENDING: Show "Ben kimim?" ───
+  return (
+    <div style={pageStyle}>
+      <div style={cardStyle}>
+        <div style={{ fontSize: '64px', marginBottom: '16px' }}>🤝</div>
+        <h1 style={{ color: '#06b6d4', fontSize: '22px', fontWeight: '700', margin: '0 0 8px' }}>QR Kod Okundu!</h1>
+        <p style={{ color: '#94a3b8', fontSize: '15px', margin: '0 0 28px', lineHeight: '1.5' }}>
+          Sayacı başlatmak için aşağıdan kendinizi seçin:
+        </p>
+
+        {user1 && (
+          <a href={`/activate/${matchId}/go?email=${encodeURIComponent(user1.email)}`} style={btnStyle}>
+            <span style={{ fontSize: '18px', fontWeight: '700' }}>{user1.full_name}</span>
+            <span style={{ display: 'block', color: '#06b6d4', fontSize: '13px', marginTop: '4px' }}>{user1.company}</span>
+          </a>
         )}
 
-        <p style={{ color: '#475569', fontSize: '12px', textTransform: 'uppercase' as const, letterSpacing: '2px' }}>TEKNOPARK ANKARA</p>
+        {user2 && (
+          <a href={`/activate/${matchId}/go?email=${encodeURIComponent(user2.email)}`} style={{...btnStyle, marginTop: '12px'}}>
+            <span style={{ fontSize: '18px', fontWeight: '700' }}>{user2.full_name}</span>
+            <span style={{ display: 'block', color: '#06b6d4', fontSize: '13px', marginTop: '4px' }}>{user2.company}</span>
+          </a>
+        )}
+
+        <p style={footerStyle}>TEKNOPARK ANKARA</p>
       </div>
     </div>
   );
 }
+
+// ─── Shared styles ───
+const pageStyle: React.CSSProperties = {
+  minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+  fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: '20px',
+};
+
+const cardStyle: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)',
+  borderRadius: '24px', border: '1px solid rgba(255,255,255,0.1)',
+  padding: '48px 28px', maxWidth: '400px', width: '100%', textAlign: 'center',
+};
+
+const btnStyle: React.CSSProperties = {
+  display: 'block', padding: '18px 20px',
+  background: 'linear-gradient(135deg, rgba(6,182,212,0.15), rgba(59,130,246,0.1))',
+  border: '2px solid rgba(6,182,212,0.3)', borderRadius: '16px',
+  color: '#fff', textDecoration: 'none', transition: 'all 0.2s',
+};
+
+const linkStyle: React.CSSProperties = {
+  display: 'block', padding: '14px 20px',
+  background: 'linear-gradient(135deg, rgba(6,182,212,0.15), rgba(59,130,246,0.1))',
+  border: '1px solid rgba(6,182,212,0.3)', borderRadius: '12px',
+  color: '#fff', textDecoration: 'none', fontSize: '16px', fontWeight: '600',
+};
+
+const linkSubStyle: React.CSSProperties = {
+  display: 'block', color: '#06b6d4', fontSize: '12px', marginTop: '2px',
+};
+
+const footerStyle: React.CSSProperties = {
+  color: '#475569', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '2px', marginTop: '28px',
+};
