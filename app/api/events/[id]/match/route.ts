@@ -1,11 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { NextResponse, NextRequest } from 'next/server';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// POST: Eşleştirme oluştur ve otomatik başlat
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -13,7 +14,18 @@ export async function POST(
   try {
     const eventId = params.id;
 
-    // Get all participants for this event
+    // Etkinlik bilgilerini al
+    const { data: event, error: eventError } = await supabase
+      .from('events')
+      .select('*')
+      .eq('id', eventId)
+      .single();
+
+    if (eventError || !event) {
+      return NextResponse.json({ error: 'Etkinlik bulunamadı.' }, { status: 404 });
+    }
+
+    // Katılımcıları al
     const { data: participants, error: participantsError } = await supabase
       .from('users')
       .select('*')
@@ -27,34 +39,96 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // Simple round-robin matching algorithm
-    const matches = [];
-    const shuffled = [...participants].sort(() => Math.random() - 0.5);
-    
-    for (let i = 0; i < shuffled.length; i += 2) {
-      if (i + 1 < shuffled.length) {
-        matches.push({
-          event_id: eventId,
-          user1_id: shuffled[i].id,
-          user2_id: shuffled[i + 1].id,
-          round_number: 1,
-          status: 'pending'
+    // Mevcut round numarasını bul
+    const { data: existingMatches } = await supabase
+      .from('matches')
+      .select('round_number')
+      .eq('event_id', eventId);
+
+    const currentMaxRound = existingMatches && existingMatches.length > 0
+      ? Math.max(...existingMatches.map(m => m.round_number || 1))
+      : 0;
+
+    // Mevcut round tamamlanmış mı kontrol et
+    if (currentMaxRound > 0) {
+      const { data: activeMatches } = await supabase
+        .from('matches')
+        .select('id')
+        .eq('event_id', eventId)
+        .eq('round_number', currentMaxRound)
+        .in('status', ['pending', 'active']);
+
+      if (activeMatches && activeMatches.length > 0) {
+        return NextResponse.json({ 
+          error: 'Mevcut turda henüz tamamlanmamış eşleşmeler var.' 
+        }, { status: 400 });
+      }
+    }
+
+    const newRound = currentMaxRound + 1;
+
+    // Daha önce eşleşmiş çiftleri bul (tekrar eşleşmesinler)
+    const previousPairs = new Set<string>();
+    if (existingMatches && existingMatches.length > 0) {
+      const { data: allPrevMatches } = await supabase
+        .from('matches')
+        .select('user1_id, user2_id')
+        .eq('event_id', eventId);
+
+      if (allPrevMatches) {
+        allPrevMatches.forEach(m => {
+          previousPairs.add(`${m.user1_id}-${m.user2_id}`);
+          previousPairs.add(`${m.user2_id}-${m.user1_id}`);
         });
       }
     }
 
-    // If odd number of participants, last person waits
-    if (shuffled.length % 2 !== 0) {
-      console.log('Odd number of participants, one person will wait');
+    // Eşleştirme algoritması
+    const shuffled = [...participants].sort(() => Math.random() - 0.5);
+    const matched = new Set<string>();
+    const matches: any[] = [];
+    const now = new Date().toISOString();
+
+    for (let i = 0; i < shuffled.length; i++) {
+      if (matched.has(shuffled[i].id)) continue;
+
+      for (let j = i + 1; j < shuffled.length; j++) {
+        if (matched.has(shuffled[j].id)) continue;
+
+        const pairKey = `${shuffled[i].id}-${shuffled[j].id}`;
+        if (newRound > 1 && previousPairs.has(pairKey)) continue;
+
+        matches.push({
+          event_id: eventId,
+          user1_id: shuffled[i].id,
+          user2_id: shuffled[j].id,
+          round_number: newRound,
+          status: 'active',
+          started_at: now
+        });
+
+        matched.add(shuffled[i].id);
+        matched.add(shuffled[j].id);
+        break;
+      }
     }
 
-    // Delete existing matches for this event (if re-matching)
-    await supabase
-      .from('matches')
-      .delete()
-      .eq('event_id', eventId);
+    // Eşleşemeyenler için fallback (daha önce eşleşmiş olsa bile)
+    const unmatched = shuffled.filter(p => !matched.has(p.id));
+    for (let i = 0; i < unmatched.length; i += 2) {
+      if (i + 1 < unmatched.length) {
+        matches.push({
+          event_id: eventId,
+          user1_id: unmatched[i].id,
+          user2_id: unmatched[i + 1].id,
+          round_number: newRound,
+          status: 'active',
+          started_at: now
+        });
+      }
+    }
 
-    // Insert new matches
+    // Yeni eşleşmeleri kaydet
     if (matches.length > 0) {
       const { error: insertError } = await supabase
         .from('matches')
@@ -63,7 +137,7 @@ export async function POST(
       if (insertError) throw insertError;
     }
 
-    // Update event status
+    // Etkinlik durumunu güncelle
     await supabase
       .from('events')
       .update({ status: 'active' })
@@ -71,11 +145,13 @@ export async function POST(
 
     return NextResponse.json({ 
       success: true, 
+      round: newRound,
       matchCount: matches.length,
-      message: `${matches.length} eşleştirme oluşturuldu.`
+      waitingCount: participants.length - (matches.length * 2),
+      message: `Tur ${newRound}: ${matches.length} eşleştirme oluşturuldu ve başlatıldı.`
     });
   } catch (error: any) {
-    console.error('Error creating matches:', error);
+    console.error('Match creation error:', error);
     return NextResponse.json({ 
       error: error.message || 'Eşleştirme sırasında hata oluştu.' 
     }, { status: 500 });
