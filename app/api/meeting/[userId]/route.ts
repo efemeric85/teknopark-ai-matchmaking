@@ -12,53 +12,66 @@ export async function GET(
 ) {
   try {
     const userId = decodeURIComponent(params.userId);
+    console.log('[Meeting API] Looking up:', userId);
 
     // Kullanıcıyı bul: email veya UUID ile
     let user: any = null;
 
     if (userId.includes('@')) {
-      const { data } = await supabase
+      // Email ile ara
+      const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('email', userId)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      user = data;
+        .limit(1);
+
+      console.log('[Meeting API] Email search result:', data?.length, 'error:', error?.message);
+
+      if (data && data.length > 0) {
+        user = data[0];
+      }
     } else {
-      const { data } = await supabase
+      // UUID ile ara
+      const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .single();
+
+      console.log('[Meeting API] UUID search result:', data?.id, 'error:', error?.message);
       user = data;
     }
 
     if (!user) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Kullanıcı bulunamadı',
-        user: null, match: null, partner: null, event: null 
+        user: null, match: null, partner: null, event: null
       }, { status: 404 });
     }
 
-    // Kullanıcının aktif veya bekleyen eşleşmesini bul
-    const { data: matchesAsUser1 } = await supabase
+    console.log('[Meeting API] Found user:', user.id, user.full_name, 'event:', user.event_id);
+
+    // Bu kullanıcının EN SON aktif eşleşmesini bul
+    // user1_id veya user2_id olarak ayrı ayrı sorgula (JOIN yok)
+    const { data: matchesAsUser1, error: e1 } = await supabase
       .from('matches')
       .select('*')
-      .eq('event_id', user.event_id)
       .eq('user1_id', user.id)
       .in('status', ['active', 'pending'])
       .order('round_number', { ascending: false })
       .limit(1);
 
-    const { data: matchesAsUser2 } = await supabase
+    const { data: matchesAsUser2, error: e2 } = await supabase
       .from('matches')
       .select('*')
-      .eq('event_id', user.event_id)
       .eq('user2_id', user.id)
       .in('status', ['active', 'pending'])
       .order('round_number', { ascending: false })
       .limit(1);
+
+    console.log('[Meeting API] Matches as user1:', matchesAsUser1?.length, 'error:', e1?.message);
+    console.log('[Meeting API] Matches as user2:', matchesAsUser2?.length, 'error:', e2?.message);
 
     // En güncel eşleşmeyi al
     const allMatches = [
@@ -69,27 +82,24 @@ export async function GET(
     const match = allMatches.length > 0 ? allMatches[0] : null;
 
     if (!match) {
-      // Eşleşme yok, etkinlik bilgisini yine de dön
+      // Eşleşme yok ama etkinlik bilgisini dön
       const { data: event } = await supabase
         .from('events')
         .select('*')
         .eq('id', user.event_id)
         .single();
 
+      console.log('[Meeting API] No match found for user:', user.id);
+
       return NextResponse.json({
-        user: {
-          id: user.id,
-          full_name: user.full_name,
-          company: user.company,
-          title: user.title,
-          email: user.email,
-          event_id: user.event_id
-        },
+        user: { id: user.id, full_name: user.full_name, company: user.company, title: user.title, email: user.email, event_id: user.event_id },
         match: null,
         partner: null,
-        event
+        event: event ? { id: event.id, name: event.name, duration: event.duration, status: event.status } : null
       });
     }
+
+    console.log('[Meeting API] Found match:', match.id, 'status:', match.status, 'round:', match.round_number);
 
     // Partner bilgisini al
     const partnerId = match.user1_id === user.id ? match.user2_id : match.user1_id;
@@ -99,7 +109,7 @@ export async function GET(
       .eq('id', partnerId)
       .single();
 
-    // Etkinlik bilgisini al (süre için)
+    // Etkinlik bilgisi
     const { data: event } = await supabase
       .from('events')
       .select('*')
@@ -107,38 +117,13 @@ export async function GET(
       .single();
 
     return NextResponse.json({
-      user: {
-        id: user.id,
-        full_name: user.full_name,
-        company: user.company,
-        title: user.title,
-        email: user.email,
-        event_id: user.event_id
-      },
-      match: {
-        id: match.id,
-        status: match.status,
-        started_at: match.started_at,
-        round_number: match.round_number
-      },
-      partner: partner ? {
-        id: partner.id,
-        full_name: partner.full_name,
-        company: partner.company,
-        title: partner.title,
-        goal: partner.goal
-      } : null,
-      event: event ? {
-        id: event.id,
-        name: event.name,
-        duration: event.duration,
-        status: event.status
-      } : null
+      user: { id: user.id, full_name: user.full_name, company: user.company, title: user.title, email: user.email, event_id: user.event_id },
+      match: { id: match.id, status: match.status, started_at: match.started_at, round_number: match.round_number },
+      partner: partner ? { id: partner.id, full_name: partner.full_name, company: partner.company, title: partner.title, goal: partner.goal } : null,
+      event: event ? { id: event.id, name: event.name, duration: event.duration, status: event.status } : null
     });
   } catch (error: any) {
-    console.error('Meeting API error:', error);
-    return NextResponse.json({ 
-      error: error.message || 'Veri alınırken hata oluştu.' 
-    }, { status: 500 });
+    console.error('[Meeting API] Error:', error);
+    return NextResponse.json({ error: error.message || 'Veri alınırken hata oluştu.' }, { status: 500 });
   }
 }
