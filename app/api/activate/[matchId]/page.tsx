@@ -34,6 +34,7 @@ export default async function ActivatePage({
       title = 'Bu eşleşme tamamlanmış';
       subtitle = 'Bu tur sona erdi.';
     } else {
+      // PENDING → ACTIVE
       const { error } = await supabase
         .from('matches')
         .update({ status: 'active', started_at: new Date().toISOString() })
@@ -63,12 +64,12 @@ export default async function ActivatePage({
       <div style={{
         background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)',
         borderRadius: '24px', border: '1px solid rgba(255,255,255,0.1)',
-        padding: '48px 32px', maxWidth: '400px', width: '100%', textAlign: 'center',
+        padding: '48px 32px', maxWidth: '400px', width: '100%', textAlign: 'center' as const,
       }}>
         <div style={{ fontSize: '64px', marginBottom: '16px' }}>{icon}</div>
         <h1 style={{ color: color, fontSize: '24px', fontWeight: '700', margin: '0 0 12px' }}>{title}</h1>
         <p style={{ color: '#94a3b8', fontSize: '15px', margin: '0 0 24px', lineHeight: '1.5' }}>{subtitle}</p>
-        <p style={{ color: '#475569', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '2px' }}>TEKNOPARK ANKARA</p>
+        <p style={{ color: '#475569', fontSize: '12px', textTransform: 'uppercase' as const, letterSpacing: '2px' }}>TEKNOPARK ANKARA</p>
       </div>
     </div>
   );
