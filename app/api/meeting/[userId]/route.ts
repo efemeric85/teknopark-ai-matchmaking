@@ -46,41 +46,28 @@ export async function GET(
     const maxRound = Math.max(...allEventMatches.map(m => m.round_number || 1));
     const currentRoundMatches = allEventMatches.filter(m => (m.round_number || 1) === maxRound);
 
-    // Bu kullanıcının bu tur'daki eşleşmesi
     const userMatch = currentRoundMatches.find(
       m => (m.user1_id === user.id || m.user2_id === user.id) && (m.status === 'pending' || m.status === 'active')
     );
 
     if (!userMatch) {
-      // Kullanıcı bu turda eşleşmemiş (beklemede)
       const activeMatches = currentRoundMatches.filter(m => m.status === 'active');
       const pendingMatches = currentRoundMatches.filter(m => m.status === 'pending');
       const allStarted = pendingMatches.length === 0 && activeMatches.length > 0;
 
-      // Son başlayan eşleşmeyi bul (en geç started_at)
       let lastStartedAt: string | null = null;
       if (activeMatches.length > 0) {
-        const sorted = activeMatches
-          .filter(m => m.started_at)
+        const sorted = activeMatches.filter(m => m.started_at)
           .sort((a, b) => new Date(b.started_at!).getTime() - new Date(a.started_at!).getTime());
         if (sorted.length > 0) lastStartedAt = sorted[0].started_at;
       }
 
       return NextResponse.json({
         user: userInfo, match: null, partner: null, event: eventInfo,
-        waiting: {
-          isWaiting: true,
-          roundNumber: maxRound,
-          activeCount: activeMatches.length,
-          pendingCount: pendingMatches.length,
-          totalMatches: currentRoundMatches.length,
-          allStarted,
-          lastStartedAt,
-        }
+        waiting: { isWaiting: true, roundNumber: maxRound, activeCount: activeMatches.length, pendingCount: pendingMatches.length, totalMatches: currentRoundMatches.length, allStarted, lastStartedAt }
       });
     }
 
-    // Partner bilgisi
     const partnerId = userMatch.user1_id === user.id ? userMatch.user2_id : userMatch.user1_id;
     const { data: partner } = await supabase
       .from('users').select('*').eq('id', partnerId).single();
@@ -89,8 +76,7 @@ export async function GET(
       user: userInfo,
       match: { id: userMatch.id, status: userMatch.status, started_at: userMatch.started_at, round_number: userMatch.round_number },
       partner: partner ? { id: partner.id, full_name: partner.full_name, company: partner.company, title: partner.title, goal: partner.goal } : null,
-      event: eventInfo,
-      waiting: null,
+      event: eventInfo, waiting: null,
     });
   } catch (error: any) {
     console.error('[Meeting API] Error:', error);
