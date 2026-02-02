@@ -92,6 +92,8 @@ export async function GET(
     }
 
     // ─── 3. Her aktif event için match'leri tara ───
+    // ÖNCELİK: Kullanıcının EN SON turda eşleşmesi var mı?
+    // Yoksa waiting state döndür (eski turdan completed match gösterme!)
     let bestMatch: any = null;
     let bestUser: any = null;
     let bestEvent: any = null;
@@ -101,34 +103,46 @@ export async function GET(
       const user = allUsers.find(u => u.event_id === event.id);
       if (!user) continue;
 
-      const { data: matches } = await supabase
+      // Önce event'in EN SON turunu bul (tüm match'lerden)
+      const { data: allEventMatches } = await supabase
+        .from('matches').select('round_number, status, started_at, user1_id, user2_id')
+        .eq('event_id', event.id)
+        .order('round_number', { ascending: false }).limit(1);
+
+      if (!allEventMatches || allEventMatches.length === 0) continue;
+
+      const eventLatestRound = allEventMatches[0].round_number;
+
+      // Kullanıcının BU SON turda match'i var mı?
+      const { data: userLatestMatches } = await supabase
         .from('matches').select('*')
         .eq('event_id', event.id)
-        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-        .order('round_number', { ascending: false })
-        .order('created_at', { ascending: false });
+        .eq('round_number', eventLatestRound)
+        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
 
-      if (!matches || matches.length === 0) continue;
+      if (!userLatestMatches || userLatestMatches.length === 0) {
+        // Kullanıcı en son turda EŞLEŞMEMİŞ → waiting state (Section 4'e bırak)
+        console.log('[MEETING-V7] User', user.id, 'unmatched in round', eventLatestRound, 'of event', event.id);
+        continue;
+      }
 
-      const maxRound = matches[0].round_number;
-      const latestRoundMatches = matches.filter(m => m.round_number === maxRound);
-
-      for (const match of latestRoundMatches) {
+      // En son turdaki match'leri puanla
+      for (const match of userLatestMatches) {
         const now = Date.now();
         let score = 0;
 
         if (match.status === 'pending') {
-          score = 1000 + maxRound;
+          score = 1000 + eventLatestRound;
         } else if (match.status === 'active' && match.started_at) {
           const elapsed = (now - new Date(match.started_at).getTime()) / 1000;
           const duration = event.round_duration_sec || event.duration || 360;
           if (elapsed < duration) {
-            score = 500 + maxRound;
+            score = 500 + eventLatestRound;
           } else {
-            score = 100 + maxRound;
+            score = 100 + eventLatestRound;
           }
         } else if (match.status === 'completed') {
-          score = 50 + maxRound;
+          score = 50 + eventLatestRound;
         }
 
         if (score > bestScore) {
@@ -140,7 +154,7 @@ export async function GET(
       }
     }
 
-    // ─── 4. Eşleşme bulunamadı ───
+    // ─── 4. Eşleşme bulunamadı veya kullanıcı son turda eşleşmemiş ───
     if (!bestMatch || !bestUser || !bestEvent) {
       const event = events[0];
       const user = allUsers.find(u => u.event_id === event.id) || allUsers[0];
