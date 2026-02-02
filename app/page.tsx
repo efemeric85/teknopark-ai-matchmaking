@@ -14,9 +14,6 @@ export default function HomePage() {
   const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [registered, setRegistered] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -33,13 +30,6 @@ export default function HomePage() {
   const [lookingUp, setLookingUp] = useState(false);
 
   useEffect(() => {
-    const savedUserId = localStorage.getItem('teknopark_user_id');
-    const savedUserEmail = localStorage.getItem('teknopark_user_email');
-    if (savedUserId) {
-      setUserId(savedUserId);
-      setUserEmail(savedUserEmail);
-      setRegistered(true);
-    }
     fetchEvents();
   }, []);
 
@@ -95,13 +85,12 @@ export default function HomePage() {
       if (data.success && data.user) {
         localStorage.setItem('teknopark_user_id', data.user.id);
         localStorage.setItem('teknopark_user_email', data.user.email);
-        setUserId(data.user.id);
-        setUserEmail(data.user.email);
-        setRegistered(true);
         toast({
           title: "Kayıt Başarılı! 🎉",
-          description: "Eşleştirmeler başlayınca bilgilendirileceksiniz."
+          description: "Eşleşme sayfanıza yönlendiriliyorsunuz..."
         });
+        // Kayıt sonrası meeting sayfasına yönlendir
+        window.location.href = `/meeting/${data.user.email}`;
       } else {
         throw new Error(data.error || 'Kayıt başarısız');
       }
@@ -116,22 +105,6 @@ export default function HomePage() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('teknopark_user_id');
-    localStorage.removeItem('teknopark_user_email');
-    setUserId(null);
-    setUserEmail(null);
-    setRegistered(false);
-    setShowEmailLogin(true);
-    setFormData({
-      email: '',
-      full_name: '',
-      company: '',
-      position: '',
-      current_intent: ''
-    });
-  };
-
   const handleEmailLogin = async () => {
     if (!loginEmail || !selectedEvent) return;
     
@@ -142,12 +115,8 @@ export default function HomePage() {
       if (data.user) {
         localStorage.setItem('teknopark_user_id', data.user.id);
         localStorage.setItem('teknopark_user_email', data.user.email);
-        setUserId(data.user.id);
-        setUserEmail(data.user.email);
-        setRegistered(true);
-        setShowEmailLogin(false);
         
-        // Eşleşme kontrolü yap ve varsa yönlendir
+        // Giriş sonrası meeting sayfasına yönlendir
         window.location.href = `/meeting/${data.user.email}`;
       } else {
         toast({
@@ -198,23 +167,6 @@ export default function HomePage() {
   };
 
   const selectedEventData = events.find(e => e.id === selectedEvent);
-
-  // Kayıtlı kullanıcı ise direkt meeting sayfasına yönlendir
-  if (registered && userId && userEmail) {
-    // Otomatik yönlendirme
-    if (typeof window !== 'undefined') {
-      window.location.href = `/meeting/${userEmail}`;
-    }
-    
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-cyan-600" />
-          <p className="text-gray-600">Yönlendiriliyorsunuz...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-blue-50">
