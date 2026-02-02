@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { NextResponse, NextRequest } from 'next/server';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,74 +11,134 @@ export async function GET(
   { params }: { params: { userId: string } }
 ) {
   try {
-    const identifier = decodeURIComponent(params.userId || '');
-    if (!identifier) {
-      return NextResponse.json({ error: 'Kullanıcı kimliği gerekli' }, { status: 400 });
-    }
+    const userId = decodeURIComponent(params.userId);
 
-    const isEmail = identifier.includes('@');
-    let user;
+    // Kullanıcıyı bul: email veya UUID ile
+    let user: any = null;
 
-    if (isEmail) {
-      const { data, error } = await supabase
-        .from('users').select('*')
-        .eq('email', identifier)
+    if (userId.includes('@')) {
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', userId)
         .order('created_at', { ascending: false })
-        .limit(1).single();
-      if (error || !data) return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
+        .limit(1)
+        .single();
       user = data;
     } else {
-      const { data, error } = await supabase
-        .from('users').select('*')
-        .eq('id', identifier).single();
-      if (error || !data) return NextResponse.json({ error: 'Kullanıcı bulunamadı' }, { status: 404 });
+      const { data } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
       user = data;
     }
 
-    // Event bilgisi
-    const { data: event } = await supabase
-      .from('events').select('id, name, round_duration_sec, status')
-      .eq('id', user.event_id).single();
-
-    // Tüm eşleşmeleri bul
-    const { data: m1 } = await supabase.from('matches').select('*').eq('user1_id', user.id);
-    const { data: m2 } = await supabase.from('matches').select('*').eq('user2_id', user.id);
-    const allMatches = [...(m1 || []), ...(m2 || [])];
-
-    // Mevcut tur = en yüksek round_number
-    const currentRound = allMatches.length > 0
-      ? Math.max(...allMatches.map(m => m.round_number || 1))
-      : 0;
-
-    // Mevcut turdaki eşleşmeyi bul
-    const currentRoundMatch = allMatches.find(m => (m.round_number || 1) === currentRound);
-
-    let currentMatch = null;
-    if (currentRoundMatch) {
-      const partnerId = currentRoundMatch.user1_id === user.id
-        ? currentRoundMatch.user2_id
-        : currentRoundMatch.user1_id;
-
-      const { data: partner } = await supabase
-        .from('users')
-        .select('id, full_name, company, position, current_intent')
-        .eq('id', partnerId).single();
-
-      currentMatch = { ...currentRoundMatch, partner };
+    if (!user) {
+      return NextResponse.json({ 
+        error: 'Kullanıcı bulunamadı',
+        user: null, match: null, partner: null, event: null 
+      }, { status: 404 });
     }
 
+    // Kullanıcının aktif veya bekleyen eşleşmesini bul
+    const { data: matchesAsUser1 } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('event_id', user.event_id)
+      .eq('user1_id', user.id)
+      .in('status', ['active', 'pending'])
+      .order('round_number', { ascending: false })
+      .limit(1);
+
+    const { data: matchesAsUser2 } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('event_id', user.event_id)
+      .eq('user2_id', user.id)
+      .in('status', ['active', 'pending'])
+      .order('round_number', { ascending: false })
+      .limit(1);
+
+    // En güncel eşleşmeyi al
+    const allMatches = [
+      ...(matchesAsUser1 || []),
+      ...(matchesAsUser2 || [])
+    ].sort((a, b) => (b.round_number || 0) - (a.round_number || 0));
+
+    const match = allMatches.length > 0 ? allMatches[0] : null;
+
+    if (!match) {
+      // Eşleşme yok, etkinlik bilgisini yine de dön
+      const { data: event } = await supabase
+        .from('events')
+        .select('*')
+        .eq('id', user.event_id)
+        .single();
+
+      return NextResponse.json({
+        user: {
+          id: user.id,
+          full_name: user.full_name,
+          company: user.company,
+          title: user.title,
+          email: user.email,
+          event_id: user.event_id
+        },
+        match: null,
+        partner: null,
+        event
+      });
+    }
+
+    // Partner bilgisini al
+    const partnerId = match.user1_id === user.id ? match.user2_id : match.user1_id;
+    const { data: partner } = await supabase
+      .from('users')
+      .select('id, full_name, company, title, email, goal')
+      .eq('id', partnerId)
+      .single();
+
+    // Etkinlik bilgisini al (süre için)
+    const { data: event } = await supabase
+      .from('events')
+      .select('*')
+      .eq('id', user.event_id)
+      .single();
+
     return NextResponse.json({
-      user,
+      user: {
+        id: user.id,
+        full_name: user.full_name,
+        company: user.company,
+        title: user.title,
+        email: user.email,
+        event_id: user.event_id
+      },
+      match: {
+        id: match.id,
+        status: match.status,
+        started_at: match.started_at,
+        round_number: match.round_number
+      },
+      partner: partner ? {
+        id: partner.id,
+        full_name: partner.full_name,
+        company: partner.company,
+        title: partner.title,
+        goal: partner.goal
+      } : null,
       event: event ? {
         id: event.id,
         name: event.name,
-        round_duration_sec: event.round_duration_sec || 360
-      } : null,
-      currentRound,
-      currentMatch
+        duration: event.duration,
+        status: event.status
+      } : null
     });
   } catch (error: any) {
     console.error('Meeting API error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ 
+      error: error.message || 'Veri alınırken hata oluştu.' 
+    }, { status: 500 });
   }
 }
