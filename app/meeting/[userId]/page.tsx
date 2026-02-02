@@ -243,9 +243,23 @@ export default function MeetingPage() {
     );
   }
 
-  // ═══════════════════════════════════════════
-  // STATE 4: TUR TAMAMLANDI
-  // ═══════════════════════════════════════════
+  // STATE 4a: HENÜZ EŞLEŞME YOK (yeni kayıt veya tur başlamadı)
+  if (!match && !waiting) {
+    return (
+      <div style={S.page}><div style={S.card}>
+        {header}
+        <div style={{ background: 'rgba(6,182,212,0.1)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(6,182,212,0.2)' }}>
+          <div style={{ fontSize: '40px', marginBottom: '8px' }}>🎯</div>
+          <h2 style={{ color: '#06b6d4', fontSize: '18px', fontWeight: '600', margin: '0 0 8px' }}>Eşleşme Bekleniyor</h2>
+          <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>
+            Eşleşme için bu sayfada bekleyiniz. Eşleşme yapıldığında sayfa otomatik güncellenecek.
+          </p>
+        </div>
+      </div></div>
+    );
+  }
+
+  // STATE 4b: TUR TAMAMLANDI (completed match)
   return (
     <div style={S.page}><div style={S.card}>
       {header}
