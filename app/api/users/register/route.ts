@@ -41,7 +41,11 @@ export async function POST(request: NextRequest) {
       .eq('event_id', event_id);
 
     if (existing && existing.length > 0) {
-      return NextResponse.json({ error: 'Bu etkinliğe zaten kayıtlısınız. Eşleşme sayfanıza yönlendirileceksiniz.' }, { status: 409 });
+      return NextResponse.json({
+        error: 'Bu etkinliğe zaten kayıtlısınız.',
+        duplicate: true,
+        redirect: `/meeting/${encodeURIComponent(email.trim().toLowerCase())}`,
+      }, { status: 409 });
     }
 
     // ─── Generate embedding ───
