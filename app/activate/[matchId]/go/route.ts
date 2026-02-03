@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { NextResponse, NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,39 +13,51 @@ export async function GET(
   { params }: { params: { matchId: string } }
 ) {
   const matchId = params.matchId;
-  const email = request.nextUrl.searchParams.get('email');
+  const { searchParams } = new URL(request.url);
+  const userId = searchParams.get('user');
 
-  if (!email) {
-    return NextResponse.json({ error: 'Email parametresi eksik' }, { status: 400 });
+  if (!matchId || !userId) {
+    return NextResponse.redirect(new URL('/', request.url));
   }
 
   try {
-    const { data: match } = await supabase
-      .from('matches').select('*').eq('id', matchId).single();
+    // Try to activate (pending → active)
+    const { data: activated } = await supabase
+      .from('matches')
+      .update({ status: 'active', started_at: new Date().toISOString() })
+      .eq('id', matchId)
+      .eq('status', 'pending')
+      .select()
+      .single();
 
-    if (!match) {
-      const url = new URL(`/meeting/${encodeURIComponent(email)}`, request.nextUrl.origin);
-      return NextResponse.redirect(url);
+    if (activated) {
+      // Success: first person to scan
+      const email = await getEmailById(userId);
+      return NextResponse.redirect(new URL(`/meeting/${encodeURIComponent(email)}`, request.url));
     }
 
-    // Sadece pending ise active yap
-    if (match.status === 'pending') {
-      await supabase
-        .from('matches')
-        .update({ status: 'active', started_at: new Date().toISOString() })
-        .eq('id', matchId)
-        .eq('status', 'pending');
+    // Race condition: match already active (other person scanned first)
+    const { data: existing } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .single();
 
-      console.log('[GO-ROUTE] Match activated:', matchId, 'by:', email);
-    } else {
-      console.log('[GO-ROUTE] Match already', match.status, ':', matchId);
+    if (existing && (existing.status === 'active' || existing.status === 'completed')) {
+      // Match already running, redirect to meeting page
+      const email = await getEmailById(userId);
+      return NextResponse.redirect(new URL(`/meeting/${encodeURIComponent(email)}`, request.url));
     }
 
-    const url = new URL(`/meeting/${encodeURIComponent(email)}`, request.nextUrl.origin);
-    return NextResponse.redirect(url);
-  } catch (error: any) {
+    // Match not found or weird state
+    return NextResponse.redirect(new URL('/?error=match-not-found', request.url));
+  } catch (error) {
     console.error('[GO-ROUTE] Error:', error);
-    const url = new URL(`/meeting/${encodeURIComponent(email)}`, request.nextUrl.origin);
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(new URL('/', request.url));
   }
+}
+
+async function getEmailById(userId: string): Promise<string> {
+  const { data } = await supabase.from('users').select('email').eq('id', userId).single();
+  return data?.email || userId;
 }
