@@ -94,14 +94,14 @@ export default async function ActivatePage({
           <p style={{ color: '#94a3b8', fontSize: '14px', margin: '0 0 24px' }}>Kendinizi seçin ve sayacı başlatın:</p>
 
           {user1 && (
-            <a href={`/activate/${matchId}/go?email=${encodeURIComponent(user1.email)}`} style={{ display: 'block', padding: '18px', margin: '10px 0', borderRadius: '14px', background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.3)', color: '#fff', textDecoration: 'none', fontSize: '18px', fontWeight: 700 }}>
+            <a href={`/activate/${matchId}/go?user=${user1.id}`} style={{ display: 'block', padding: '18px', margin: '10px 0', borderRadius: '14px', background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.3)', color: '#fff', textDecoration: 'none', fontSize: '18px', fontWeight: 700 }}>
               🙋 {user1.full_name}
               <span style={{ display: 'block', color: '#06b6d4', fontSize: '12px', marginTop: '4px' }}>{user1.company}</span>
             </a>
           )}
 
           {user2 && (
-            <a href={`/activate/${matchId}/go?email=${encodeURIComponent(user2.email)}`} style={{ display: 'block', padding: '18px', margin: '10px 0', borderRadius: '14px', background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.3)', color: '#fff', textDecoration: 'none', fontSize: '18px', fontWeight: 700 }}>
+            <a href={`/activate/${matchId}/go?user=${user2.id}`} style={{ display: 'block', padding: '18px', margin: '10px 0', borderRadius: '14px', background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.3)', color: '#fff', textDecoration: 'none', fontSize: '18px', fontWeight: 700 }}>
               🙋 {user2.full_name}
               <span style={{ display: 'block', color: '#06b6d4', fontSize: '12px', marginTop: '4px' }}>{user2.company}</span>
             </a>
