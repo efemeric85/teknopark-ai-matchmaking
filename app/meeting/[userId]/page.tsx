@@ -1,209 +1,254 @@
 'use client';
 
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import QRCode from 'react-qr-code';
 
-interface MeetingData {
-  v?: string;
-  user?: { id: string; full_name: string; company: string; email: string };
-  match?: { id: string; status: string; started_at: string | null; round_number: number } | null;
-  partner?: { id: string; full_name: string; company: string; title: string; goal: string } | null;
-  event?: { id: string; name: string; duration: number; status: string } | null;
-  waiting?: {
-    isWaiting: boolean; roundNumber: number;
-    activeCount: number; pendingCount: number;
-    totalMatches: number; allStarted: boolean; lastStartedAt: string | null;
-  } | null;
-  roundInfo?: { current: number; max: number; participantCount: number; allCompleted: boolean } | null;
-  error?: string;
-}
+interface UserData { id: string; full_name: string; company: string; email: string; }
+interface MatchData { id: string; status: string; started_at: string | null; round_number: number; icebreaker_question?: string | null; }
+interface PartnerData { id: string; full_name: string; company: string; email: string; }
+interface EventData { id: string; name: string; duration: number; status: string; }
+interface WaitingData { isWaiting: boolean; roundNumber: number; activeCount: number; pendingCount: number; totalMatches: number; allStarted: boolean; lastStartedAt: string | null; }
+interface RoundInfo { current: number; max: number; participantCount: number; allCompleted: boolean; }
 
 const S = {
   page: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)', fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: '16px' } as React.CSSProperties,
-  card: { background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.1)', padding: '24px', maxWidth: '400px', width: '100%', textAlign: 'center' } as React.CSSProperties,
-  label: { color: '#94a3b8', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '2px', margin: '0 0 8px' } as React.CSSProperties,
+  card: { background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.1)', padding: '28px 20px', maxWidth: '420px', width: '100%', textAlign: 'center' as const } as React.CSSProperties,
 };
 
 export default function MeetingPage() {
   const params = useParams();
-  const userId = params.userId as string;
-  const [data, setData] = useState<MeetingData | null>(null);
-  const [now, setNow] = useState(Date.now());
+  const userId = decodeURIComponent(params.userId as string);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch(`/api/meeting/${encodeURIComponent(userId)}`);
-        const json = await res.json();
-        setData(json);
-      } catch (e) {
-        console.error('Fetch error:', e);
-      }
-    };
-    fetchData();
-    const interval = setInterval(fetchData, 3000);
-    return () => clearInterval(interval);
-  }, [userId]);
+  const [user, setUser] = useState<UserData | null>(null);
+  const [match, setMatch] = useState<MatchData | null>(null);
+  const [partner, setPartner] = useState<PartnerData | null>(null);
+  const [event, setEvent] = useState<EventData | null>(null);
+  const [waiting, setWaiting] = useState<WaitingData | null>(null);
+  const [roundInfo, setRoundInfo] = useState<RoundInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+  const prevMatchRef = useRef<string | null>(null);
 
+  // Tick every second for timer
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    const t = setInterval(() => setTick(p => p + 1), 1000);
     return () => clearInterval(t);
   }, []);
 
-  const formatTime = (seconds: number): string => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/meeting/${encodeURIComponent(userId)}`, { cache: 'no-store' });
+      const data = await res.json();
+
+      if (data.error && !data.user) {
+        setError(data.error);
+        return;
+      }
+
+      setUser(data.user);
+      setMatch(data.match);
+      setPartner(data.partner);
+      setEvent(data.event);
+      setWaiting(data.waiting);
+      setRoundInfo(data.roundInfo || null);
+      setError(null);
+
+      // Match değiştiyse log
+      const newMatchId = data.match?.id || 'none';
+      if (prevMatchRef.current && prevMatchRef.current !== newMatchId) {
+        console.log('[MEETING-PAGE] Match changed:', prevMatchRef.current, '->', newMatchId);
+      }
+      prevMatchRef.current = newMatchId;
+    } catch (e: any) {
+      console.error('[MEETING-PAGE] Fetch error:', e);
+    }
+  }, [userId]);
+
+  // Poll every 3 seconds
+  useEffect(() => {
+    fetchData();
+    const iv = setInterval(fetchData, 3000);
+    return () => clearInterval(iv);
+  }, [fetchData]);
+
+  // Timer calculation
+  const calcRemaining = (): number => {
+    if (!match?.started_at || !event?.duration) return 0;
+    const elapsed = (Date.now() - new Date(match.started_at).getTime()) / 1000;
+    return Math.max(0, Math.ceil(event.duration - elapsed));
   };
 
-  // ─── LOADING ───
-  if (!data || !data.user) {
-    return (
-      <div style={S.page}><div style={S.card}>
-        <p style={{ color: '#94a3b8', fontSize: '14px' }}>Yükleniyor...</p>
-      </div></div>
-    );
-  }
+  const formatTime = (s: number): string => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  };
 
-  const { match, partner, event, waiting, roundInfo } = data;
-  const duration = event?.duration || 360;
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const allDone = roundInfo?.allCompleted === true;
+  const timerColor = (s: number): string => {
+    if (s <= 30) return '#ef4444';
+    if (s <= 60) return '#f59e0b';
+    return '#10b981';
+  };
 
-  // ─── HEADER ───
+  // Header component
   const header = (
-    <div style={{ marginBottom: '16px' }}>
-      <p style={S.label}>TEKNOPARK ANKARA</p>
-      <h2 style={{ color: '#06b6d4', fontSize: '16px', fontWeight: '600', margin: '0 0 12px' }}>
-        {event?.name || 'Networking'}
-      </h2>
-      <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', padding: '12px', marginBottom: '8px' }}>
-        <h3 style={{ color: '#fff', fontSize: '16px', fontWeight: '600', margin: '0 0 2px' }}>
-          {data.user!.full_name}
-        </h3>
-        <p style={{ color: '#06b6d4', fontSize: '12px', margin: 0 }}>
-          {data.user!.company || data.user!.email}
-        </p>
-      </div>
+    <div style={{ marginBottom: '20px' }}>
+      <p style={{ color: '#64748b', fontSize: '11px', letterSpacing: '3px', margin: '0 0 4px', textTransform: 'uppercase' }}>TEKNOPARK ANKARA</p>
+      {event && <p style={{ color: '#06b6d4', fontSize: '18px', fontWeight: 700, margin: '0 0 8px' }}>{event.name}</p>}
       {roundInfo && roundInfo.max > 0 && (
-        <p style={{ color: '#475569', fontSize: '11px', margin: '4px 0 0' }}>
-          Tur {roundInfo.current}/{roundInfo.max}
-        </p>
+        <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '10px', padding: '8px 16px', display: 'inline-block' }}>
+          <span style={{ color: '#e2e8f0', fontSize: '16px', fontWeight: 700 }}>{roundInfo.current}</span>
+          <span style={{ color: '#06b6d4', fontSize: '12px', margin: '0 0 0 2px' }}>/{roundInfo.max}</span>
+        </div>
       )}
     </div>
   );
 
-  // ════════════════════════════════════════
-  // STATE 1: ACTIVE MATCH - TIMER RUNNING
-  // ════════════════════════════════════════
-  if (match?.status === 'active' && match.started_at) {
-    const elapsed = Math.floor((now - new Date(match.started_at).getTime()) / 1000);
-    const remaining = Math.max(0, duration - elapsed);
-    const progress = remaining / duration;
+  // ERROR state
+  if (error && !user) {
+    return (
+      <div style={S.page}><div style={S.card}>
+        <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚠️</div>
+        <h2 style={{ color: '#f59e0b', fontSize: '18px', fontWeight: 700, margin: '0 0 8px' }}>Hata</h2>
+        <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>{error}</p>
+      </div></div>
+    );
+  }
 
-    // ── 1a: Süre devam ediyor ──
-    if (remaining > 0) {
+  // LOADING state
+  if (!user) {
+    return (
+      <div style={S.page}><div style={S.card}>
+        <div style={{ fontSize: '40px', marginBottom: '12px' }}>⏳</div>
+        <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Yükleniyor...</p>
+      </div></div>
+    );
+  }
+
+  // ALL ROUNDS COMPLETED
+  if (roundInfo?.allCompleted && !match) {
+    return (
+      <div style={S.page}><div style={S.card}>
+        {header}
+        <div style={{ background: 'rgba(16,185,129,0.1)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(16,185,129,0.2)' }}>
+          <div style={{ fontSize: '48px', marginBottom: '8px' }}>🎉</div>
+          <h2 style={{ color: '#6ee7b7', fontSize: '20px', fontWeight: 700, margin: '0 0 8px' }}>Tüm Turlar Tamamlandı!</h2>
+          <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0, lineHeight: 1.5 }}>
+            Etkinlik sona erdi. Katılımınız için teşekkürler! 🙏
+          </p>
+        </div>
+      </div></div>
+    );
+  }
+
+  // ACTIVE MATCH - TIMER RUNNING
+  if (match?.status === 'active' && match.started_at) {
+    const remaining = calcRemaining();
+
+    if (remaining <= 0) {
+      // Süre doldu
       return (
         <div style={S.page}><div style={S.card}>
           {header}
-          {partner && (
-            <div style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.15), rgba(59,130,246,0.1))', borderRadius: '16px', padding: '16px', border: '1px solid rgba(6,182,212,0.2)', marginBottom: '16px' }}>
-              <p style={S.label}>Eşleştiğiniz Kişi</p>
-              <h3 style={{ color: '#fff', fontSize: '18px', fontWeight: '700', margin: '0 0 4px' }}>{partner.full_name}</h3>
-              <p style={{ color: '#06b6d4', fontSize: '13px', margin: '0' }}>{partner.company} &bull; {partner.title}</p>
-            </div>
-          )}
-          <div style={{ background: 'rgba(16,185,129,0.1)', borderRadius: '16px', padding: '20px', border: '1px solid rgba(16,185,129,0.2)' }}>
-            <p style={{ color: '#6ee7b7', fontSize: '12px', fontWeight: '600', margin: '0 0 8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Kalan Süre</p>
-            <p style={{ color: '#fff', fontSize: '48px', fontWeight: '700', margin: '0 0 12px', fontVariantNumeric: 'tabular-nums' }}>{formatTime(remaining)}</p>
-            <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '999px', height: '8px', overflow: 'hidden' }}>
-              <div style={{ background: remaining < 60 ? '#ef4444' : '#10b981', height: '100%', width: `${progress * 100}%`, borderRadius: '999px', transition: 'width 1s linear' }} />
-            </div>
+          <div style={{ background: 'rgba(16,185,129,0.1)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(16,185,129,0.2)' }}>
+            <div style={{ fontSize: '48px', marginBottom: '8px' }}>⏰</div>
+            <h2 style={{ color: '#6ee7b7', fontSize: '20px', fontWeight: 700, margin: '0 0 8px' }}>Tur Tamamlandı!</h2>
+            <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0, lineHeight: 1.5 }}>
+              Yeni tur başladığında otomatik güncellenecek.
+            </p>
           </div>
-          <p style={{ color: '#475569', fontSize: '11px', marginTop: '12px' }}>Tur {match.round_number}</p>
+          {match && <p style={{ color: '#475569', fontSize: '11px', marginTop: '12px' }}>Tur {match.round_number}</p>}
         </div></div>
       );
     }
 
-    // ── 1b: Süre doldu ──
+    // Active timer
     return (
       <div style={S.page}><div style={S.card}>
         {header}
-        <div style={{ background: 'rgba(239,68,68,0.1)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(239,68,68,0.2)' }}>
-          <div style={{ fontSize: '40px', marginBottom: '8px' }}>⏰</div>
-          <h2 style={{ color: '#f87171', fontSize: '20px', fontWeight: '700', margin: '0 0 8px' }}>Süre Doldu!</h2>
-          <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>
-            {allDone
-              ? 'Tüm turlar tamamlandı. Etkinlik sona erdi. Katılımınız için teşekkürler!'
-              : 'Yeni tur başladığında otomatik güncellenecek.'
-            }
-          </p>
-        </div>
-        <p style={{ color: '#475569', fontSize: '11px', marginTop: '12px' }}>Tur {match.round_number}</p>
-      </div></div>
-    );
-  }
-
-  // ════════════════════════════════════════
-  // STATE 2: PENDING MATCH - QR CODE
-  // ════════════════════════════════════════
-  if (match?.status === 'pending' && partner) {
-    const activateUrl = `${baseUrl}/activate/${match.id}`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&bgcolor=0f172a&color=06b6d4&data=${encodeURIComponent(activateUrl)}`;
-
-    return (
-      <div style={S.page}><div style={S.card}>
-        {header}
-        <div style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.15), rgba(59,130,246,0.1))', borderRadius: '16px', padding: '16px', border: '1px solid rgba(6,182,212,0.2)', marginBottom: '16px' }}>
-          <p style={S.label}>Eşleştiğiniz Kişi</p>
-          <h3 style={{ color: '#fff', fontSize: '18px', fontWeight: '700', margin: '0 0 4px' }}>{partner.full_name}</h3>
-          <p style={{ color: '#06b6d4', fontSize: '13px', margin: '0' }}>{partner.company} &bull; {partner.title}</p>
-        </div>
-        <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '16px', padding: '20px' }}>
-          <p style={{ color: '#e2e8f0', fontSize: '14px', fontWeight: '600', margin: '0 0 12px' }}>📱 QR Kodu Okutun</p>
-          <div style={{ background: '#fff', borderRadius: '12px', padding: '12px', display: 'inline-block' }}>
-            <img src={qrUrl} alt="QR Code" width={200} height={200} style={{ display: 'block' }} />
+        {/* Partner info */}
+        {partner && (
+          <div style={{ background: 'rgba(6,182,212,0.1)', borderRadius: '16px', padding: '20px', border: '1px solid rgba(6,182,212,0.2)', marginBottom: '16px' }}>
+            <p style={{ color: '#94a3b8', fontSize: '11px', margin: '0 0 4px' }}>Görüşme Partneriniz</p>
+            <h3 style={{ color: '#e2e8f0', fontSize: '20px', fontWeight: 700, margin: '0 0 4px' }}>{partner.full_name}</h3>
+            <p style={{ color: '#06b6d4', fontSize: '13px', margin: 0 }}>{partner.company}</p>
           </div>
-          <p style={{ color: '#94a3b8', fontSize: '12px', margin: '12px 0 0', lineHeight: '1.5' }}>
-            Partnerinizle buluşun. İkinizden biri diğerinin telefonundaki QR kodu okuttuğunda sayaç başlayacak.
-          </p>
+        )}
+        {/* Icebreaker */}
+        {match.icebreaker_question && (
+          <div style={{ background: 'rgba(139,92,246,0.1)', borderRadius: '12px', padding: '14px', border: '1px solid rgba(139,92,246,0.2)', marginBottom: '16px' }}>
+            <p style={{ color: '#c4b5fd', fontSize: '11px', margin: '0 0 4px' }}>💬 Sohbet Başlatıcı</p>
+            <p style={{ color: '#e2e8f0', fontSize: '13px', margin: 0, lineHeight: 1.4 }}>{match.icebreaker_question}</p>
+          </div>
+        )}
+        {/* Timer */}
+        <div style={{ marginTop: '8px' }}>
+          <div style={{ fontSize: '56px', fontWeight: 800, color: timerColor(remaining), fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+            {formatTime(remaining)}
+          </div>
+          <p style={{ color: '#64748b', fontSize: '11px', margin: '8px 0 0' }}>Tur {match.round_number}</p>
         </div>
+      </div></div>
+    );
+  }
+
+  // PENDING MATCH - QR CODE DISPLAY
+  if (match?.status === 'pending') {
+    const qrUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}/activate/${match.id}`
+      : `/activate/${match.id}`;
+
+    return (
+      <div style={S.page}><div style={S.card}>
+        {header}
+        {partner && (
+          <div style={{ background: 'rgba(6,182,212,0.1)', borderRadius: '16px', padding: '16px', border: '1px solid rgba(6,182,212,0.2)', marginBottom: '16px' }}>
+            <p style={{ color: '#94a3b8', fontSize: '11px', margin: '0 0 4px' }}>Eşleşme Partneriniz</p>
+            <h3 style={{ color: '#e2e8f0', fontSize: '18px', fontWeight: 700, margin: '0 0 4px' }}>{partner.full_name}</h3>
+            <p style={{ color: '#06b6d4', fontSize: '13px', margin: 0 }}>{partner.company}</p>
+          </div>
+        )}
+        {/* QR Code */}
+        <div style={{ background: '#fff', borderRadius: '16px', padding: '20px', display: 'inline-block', marginBottom: '16px' }}>
+          <QRCode value={qrUrl} size={180} />
+        </div>
+        <p style={{ color: '#06b6d4', fontSize: '14px', fontWeight: 600, margin: '0 0 4px' }}>QR Kodu Okutun</p>
+        <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>
+          Partneriniz bu QR kodu okutup ismini seçince sayaç başlayacak.
+        </p>
         <p style={{ color: '#475569', fontSize: '11px', marginTop: '12px' }}>Tur {match.round_number}</p>
       </div></div>
     );
   }
 
-  // ════════════════════════════════════════
-  // STATE 3: WAITING (tek sayı katılımcı)
-  // ════════════════════════════════════════
+  // WAITING (odd participant out) - show timer if all started
   if (waiting?.isWaiting) {
-    const waitDuration = duration;
-    let waitRemaining = waitDuration;
-
-    if (waiting.allStarted && waiting.lastStartedAt) {
-      const waitElapsed = Math.floor((now - new Date(waiting.lastStartedAt).getTime()) / 1000);
-      waitRemaining = Math.max(0, waitDuration - waitElapsed);
-    }
+    const waitRemaining = waiting.allStarted && waiting.lastStartedAt && event?.duration
+      ? Math.max(0, Math.ceil(event.duration - (Date.now() - new Date(waiting.lastStartedAt).getTime()) / 1000))
+      : null;
 
     return (
       <div style={S.page}><div style={S.card}>
         {header}
         <div style={{ background: 'rgba(245,158,11,0.1)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(245,158,11,0.2)' }}>
           <div style={{ fontSize: '40px', marginBottom: '8px' }}>⏳</div>
-          <h2 style={{ color: '#fbbf24', fontSize: '18px', fontWeight: '600', margin: '0 0 8px' }}>Beklemedekisiniz</h2>
-          <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 16px', lineHeight: '1.5' }}>
-            Bu turda tek sayı katılımcı olduğu için eşleşme yapılamadı. Bir sonraki turda eşleşeceksiniz.
+          <h2 style={{ color: '#fbbf24', fontSize: '18px', fontWeight: 600, margin: '0 0 8px' }}>Bu Turda Bekliyorsunuz</h2>
+          <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 12px', lineHeight: 1.5 }}>
+            {waiting.pendingCount > 0
+              ? `${waiting.pendingCount} eşleşme QR bekliyor, ${waiting.activeCount} aktif.`
+              : `${waiting.activeCount} aktif görüşme devam ediyor.`
+            }
           </p>
-          {waiting.allStarted && waiting.lastStartedAt && (
-            <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '12px', padding: '12px' }}>
-              <p style={{ color: '#fbbf24', fontSize: '11px', margin: '0 0 4px', textTransform: 'uppercase' }}>Tur Bitimine Kalan</p>
-              <p style={{ color: '#fff', fontSize: '32px', fontWeight: '700', margin: 0, fontVariantNumeric: 'tabular-nums' }}>{formatTime(waitRemaining)}</p>
+          {waitRemaining !== null && waitRemaining > 0 && (
+            <div>
+              <div style={{ fontSize: '36px', fontWeight: 700, color: timerColor(waitRemaining), fontVariantNumeric: 'tabular-nums' }}>
+                {formatTime(waitRemaining)}
+              </div>
+              <p style={{ color: '#64748b', fontSize: '11px', margin: '4px 0 0' }}>
+                Yeni tur bekleniyor...
+              </p>
             </div>
-          )}
-          {!waiting.allStarted && (
-            <p style={{ color: '#78716c', fontSize: '11px', margin: '8px 0 0' }}>
-              {waiting.pendingCount} çift henüz QR okutmadı
-            </p>
           )}
         </div>
         <p style={{ color: '#475569', fontSize: '11px', marginTop: '12px' }}>Tur {waiting.roundNumber}</p>
@@ -211,38 +256,15 @@ export default function MeetingPage() {
     );
   }
 
-  // ════════════════════════════════════════
-  // STATE 4: TÜM TURLAR TAMAMLANDI
-  // ════════════════════════════════════════
-  if (allDone) {
-    return (
-      <div style={S.page}><div style={S.card}>
-        {header}
-        <div style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.15), rgba(168,85,247,0.1))', borderRadius: '16px', padding: '24px', border: '1px solid rgba(6,182,212,0.2)' }}>
-          <div style={{ fontSize: '48px', marginBottom: '8px' }}>🎉</div>
-          <h2 style={{ color: '#06b6d4', fontSize: '20px', fontWeight: '700', margin: '0 0 8px' }}>Tüm Turlar Tamamlandı!</h2>
-          <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 16px', lineHeight: '1.5' }}>
-            {roundInfo!.participantCount} katılımcı ile {roundInfo!.max} tur görüşme tamamlandı. Etkinlik sona erdi.
-          </p>
-          <p style={{ color: '#e2e8f0', fontSize: '14px', fontWeight: '600', margin: 0 }}>
-            Katılımınız için teşekkürler! 🙏
-          </p>
-        </div>
-      </div></div>
-    );
-  }
-
-  // ════════════════════════════════════════
-  // STATE 5a: HENÜZ EŞLEŞME YOK
-  // ════════════════════════════════════════
+  // NO MATCH YET - Waiting for admin to start matching
   if (!match && !waiting) {
     return (
       <div style={S.page}><div style={S.card}>
         {header}
         <div style={{ background: 'rgba(6,182,212,0.1)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(6,182,212,0.2)' }}>
           <div style={{ fontSize: '40px', marginBottom: '8px' }}>🎯</div>
-          <h2 style={{ color: '#06b6d4', fontSize: '18px', fontWeight: '600', margin: '0 0 8px' }}>Eşleşme Bekleniyor</h2>
-          <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>
+          <h2 style={{ color: '#06b6d4', fontSize: '18px', fontWeight: 600, margin: '0 0 8px' }}>Eşleşme Bekleniyor</h2>
+          <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0, lineHeight: 1.5 }}>
             Eşleşme için bu sayfada bekleyiniz. Eşleşme yapıldığında sayfa otomatik güncellenecek.
           </p>
         </div>
@@ -250,16 +272,14 @@ export default function MeetingPage() {
     );
   }
 
-  // ════════════════════════════════════════
-  // STATE 5b: TUR TAMAMLANDI (completed)
-  // ════════════════════════════════════════
+  // COMPLETED match (fallback)
   return (
     <div style={S.page}><div style={S.card}>
       {header}
       <div style={{ background: 'rgba(16,185,129,0.1)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(16,185,129,0.2)' }}>
         <div style={{ fontSize: '40px', marginBottom: '8px' }}>⏰</div>
-        <h2 style={{ color: '#6ee7b7', fontSize: '20px', fontWeight: '700', margin: '0 0 8px' }}>Tur Tamamlandı!</h2>
-        <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0, lineHeight: '1.5' }}>
+        <h2 style={{ color: '#6ee7b7', fontSize: '20px', fontWeight: 700, margin: '0 0 8px' }}>Tur Tamamlandı!</h2>
+        <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0, lineHeight: 1.5 }}>
           Yeni tur başladığında otomatik güncellenecek.
         </p>
       </div>
