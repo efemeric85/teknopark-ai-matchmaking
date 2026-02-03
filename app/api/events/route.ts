@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
         date: date || new Date().toISOString().split('T')[0],
         duration: parseInt(duration) || 360,
         round_duration_sec: parseInt(duration) || 360,
-        status: 'active',
+        status: 'draft',
       })
       .select()
       .single();
