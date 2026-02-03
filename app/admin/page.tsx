@@ -272,65 +272,60 @@ export default function AdminPage() {
     const h2c = (window as any).html2canvas;
     const { jsPDF } = (window as any).jspdf;
 
-    // Capture screenshots at 2x for crisp rendering
-    const [pastCanvas, matrixCanvas] = await Promise.all([
+    // Build a temporary header element (browser renders Turkish perfectly)
+    const rounds = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b);
+    const headerDiv = document.createElement('div');
+    headerDiv.style.cssText = 'position:absolute;left:-9999px;top:0;background:#fff;padding:20px;font-family:-apple-system,Arial,sans-serif;width:800px;';
+    headerDiv.innerHTML = `
+      <h2 style="margin:0 0 8px 0;font-size:20px;color:#1e293b;">⚡ ${sel.name}</h2>
+      <p style="margin:2px 0;font-size:13px;color:#334155;"><b>Tarih:</b> ${fmtDate(sel.date)}</p>
+      <p style="margin:2px 0;font-size:13px;color:#334155;"><b>Katılımcı:</b> ${users.length} kişi</p>
+      <p style="margin:2px 0;font-size:13px;color:#334155;"><b>Toplam Tur:</b> ${rounds.length}</p>
+      <h3 style="margin:16px 0 0 0;font-size:16px;color:#334155;">Geçmiş Turlar</h3>
+    `;
+    document.body.appendChild(headerDiv);
+
+    const matrixTitleDiv = document.createElement('div');
+    matrixTitleDiv.style.cssText = 'position:absolute;left:-9999px;top:0;background:#fff;padding:10px 20px;font-family:-apple-system,Arial,sans-serif;width:800px;';
+    matrixTitleDiv.innerHTML = `<h3 style="margin:0;font-size:16px;color:#334155;">Eşleşme Matrisi</h3>`;
+    document.body.appendChild(matrixTitleDiv);
+
+    // Capture all sections as screenshots
+    const [headerCanvas, pastCanvas, matTitleCanvas, matrixCanvas] = await Promise.all([
+      h2c(headerDiv, { backgroundColor: '#ffffff', scale: 2 }),
       h2c(pastRoundsRef.current, { backgroundColor: '#ffffff', scale: 2 }),
+      h2c(matrixTitleDiv, { backgroundColor: '#ffffff', scale: 2 }),
       h2c(matrixRef.current, { backgroundColor: '#ffffff', scale: 2 }),
     ]);
 
+    // Cleanup temp elements
+    document.body.removeChild(headerDiv);
+    document.body.removeChild(matrixTitleDiv);
+
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
     const margin = 10;
     const contentW = pageW - margin * 2;
     let y = margin;
 
-    // Header
-    pdf.setFontSize(16);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text(sel.name, margin, y + 6); y += 12;
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(`Tarih: ${fmtDate(sel.date)}`, margin, y); y += 5;
-    pdf.text(`Katılımcı: ${users.length} kişi`, margin, y); y += 5;
-    const rounds = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b);
-    pdf.text(`Toplam Tur: ${rounds.length}`, margin, y); y += 10;
+    // Helper: add canvas image to PDF, handle page breaks
+    const addCanvasImage = (canvas: HTMLCanvasElement) => {
+      const img = canvas.toDataURL('image/png');
+      const ratio = canvas.height / canvas.width;
+      const imgH = contentW * ratio;
+      if (y + imgH > pageH - margin) {
+        pdf.addPage(); y = margin;
+      }
+      pdf.addImage(img, 'PNG', margin, y, contentW, imgH);
+      y += imgH;
+    };
 
-    // Geçmiş Turlar screenshot
-    pdf.setFontSize(13);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Geçmiş Turlar', margin, y); y += 6;
-
-    const pastImg = pastCanvas.toDataURL('image/png');
-    const pastRatio = pastCanvas.height / pastCanvas.width;
-    const pastW = Math.min(contentW, pastCanvas.width / 2 * 0.264583); // px to mm at 2x
-    const pastH = pastW * pastRatio;
-    const finalPastW = contentW;
-    const finalPastH = finalPastW * pastRatio;
-
-    // Check if it fits, otherwise add page
-    if (y + finalPastH > pdf.internal.pageSize.getHeight() - margin) {
-      pdf.addPage(); y = margin;
-    }
-    pdf.addImage(pastImg, 'PNG', margin, y, finalPastW, finalPastH);
-    y += finalPastH + 10;
-
-    // Eşleşme Matrisi screenshot
-    if (y + 20 > pdf.internal.pageSize.getHeight() - margin) {
-      pdf.addPage(); y = margin;
-    }
-    pdf.setFontSize(13);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Eşleşme Matrisi', margin, y); y += 6;
-
-    const matImg = matrixCanvas.toDataURL('image/png');
-    const matRatio = matrixCanvas.height / matrixCanvas.width;
-    const finalMatW = contentW;
-    const finalMatH = finalMatW * matRatio;
-
-    if (y + finalMatH > pdf.internal.pageSize.getHeight() - margin) {
-      pdf.addPage(); y = margin;
-    }
-    pdf.addImage(matImg, 'PNG', margin, y, finalMatW, finalMatH);
+    addCanvasImage(headerCanvas);
+    addCanvasImage(pastCanvas);
+    y += 4;
+    addCanvasImage(matTitleCanvas);
+    addCanvasImage(matrixCanvas);
 
     const now = new Date();
     const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
