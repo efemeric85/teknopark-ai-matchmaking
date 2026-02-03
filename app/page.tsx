@@ -69,9 +69,11 @@ export default function HomePage() {
   };
 
   const pageStyle: React.CSSProperties = {
-    minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    minHeight: '100vh',
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
     background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
-    fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: '20px',
+    fontFamily: "'Inter', 'Segoe UI', sans-serif",
+    padding: '0 20px 40px',
   };
   const cardStyle: React.CSSProperties = {
     background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)',
@@ -85,7 +87,7 @@ export default function HomePage() {
 
   if (success) {
     return (
-      <div style={pageStyle}>
+      <div style={{ ...pageStyle, justifyContent: 'center' }}>
         <div style={{ ...cardStyle, textAlign: 'center' }}>
           <div style={{ fontSize: '64px', marginBottom: '16px' }}>🎉</div>
           <h2 style={{ color: '#06b6d4', fontSize: '22px', fontWeight: 700, margin: '0 0 8px' }}>Kayıt Başarılı!</h2>
@@ -97,20 +99,32 @@ export default function HomePage() {
 
   return (
     <div style={pageStyle}>
-      <div style={{ maxWidth: '520px', width: '100%' }}>
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <img
-            src="/teknopark-ankara.png"
-            alt="Teknopark Ankara"
-            style={{ height: '80px', width: 'auto', display: 'block', margin: '0 auto 12px auto' }}
-          />
-          <p style={{ color: '#06b6d4', fontSize: '12px', letterSpacing: '3px', margin: '0 0 4px' }}>TEKNOPARK ANKARA</p>
-          <h1 style={{ color: '#fff', fontSize: '28px', fontWeight: 700, margin: '0 0 8px' }}>🤝 Speed Networking</h1>
-          <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Yapay zeka destekli networking etkinliği</p>
-        </div>
+      {/* ═══ LOGO: Beyaz, 300px, sayfanın yukarısında, ortada ═══ */}
+      <div style={{ textAlign: 'center', marginTop: '32px', marginBottom: '24px' }}>
+        <img
+          src="/logo-white.png"
+          alt="Teknopark Ankara Yapay Zeka Kümelenmesi"
+          style={{
+            width: '300px',
+            height: 'auto',
+            display: 'block',
+            margin: '0 auto',
+          }}
+        />
+      </div>
 
-        {/* Event selection */}
+      {/* ═══ Başlık ve Açıklama ═══ */}
+      <div style={{ textAlign: 'center', marginBottom: '32px', maxWidth: '520px', width: '100%' }}>
+        <h1 style={{ color: '#fff', fontSize: '28px', fontWeight: 700, margin: '0 0 10px' }}>
+          🤝 Speed Networking
+        </h1>
+        <p style={{ color: '#94a3b8', fontSize: '15px', margin: 0, lineHeight: '1.5' }}>
+          Yapay Zeka destekli networking eşleştirme uygulaması
+        </p>
+      </div>
+
+      {/* ═══ İçerik ═══ */}
+      <div style={{ maxWidth: '520px', width: '100%' }}>
         {!selectedEvent ? (
           <div>
             <p style={{ color: '#cbd5e1', fontSize: '14px', textAlign: 'center', marginBottom: '16px' }}>
@@ -142,7 +156,6 @@ export default function HomePage() {
           </div>
         ) : (
           <div>
-            {/* Back button if multiple events */}
             {events.length > 1 && (
               <div style={{ marginBottom: '12px' }}>
                 <button
@@ -152,7 +165,6 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Form */}
             <div style={cardStyle}>
               <h3 style={{ color: '#06b6d4', fontSize: '16px', fontWeight: 600, margin: '0 0 16px', textAlign: 'center' }}>
                 {selectedEvent.name}
