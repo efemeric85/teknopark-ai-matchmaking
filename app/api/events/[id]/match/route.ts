@@ -13,10 +13,11 @@ const supabase = createClient(
 // ═══════════════════════════════════════════
 async function validateAdmin(request: NextRequest): Promise<boolean> {
   const token = request.headers.get('x-admin-token');
-  const pw = process.env.ADMIN_PASSWORD;
-  if (!token || !pw) return false;
+  if (!token) return false;
+  const ADMIN_EMAIL = 'bahtiyarozturk@gmail.com';
+  const ADMIN_PASSWORD = 'admin123';
   const encoder = new TextEncoder();
-  const data = encoder.encode(pw + '-teknopark-admin-2026');
+  const data = encoder.encode(ADMIN_EMAIL + ':' + ADMIN_PASSWORD + '-teknopark-2026');
   const buf = await crypto.subtle.digest('SHA-256', data);
   const expected = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
   return token === expected;
