@@ -351,7 +351,7 @@ export async function POST(
     }
 
     // Max rounds cannot exceed n-1 (each person meets everyone)
-    const maxPossibleRounds = users.length - 1;
+    const maxPossibleRounds = users.length < 2 ? 0 : (users.length % 2 === 0 ? users.length - 1 : users.length);
     const effectiveMaxRounds = Math.min(maxRounds, maxPossibleRounds);
 
     // 3. Get existing matches
