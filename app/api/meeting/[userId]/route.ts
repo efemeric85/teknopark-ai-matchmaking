@@ -31,7 +31,9 @@ export async function GET(
 ) {
   try {
     const userId = decodeURIComponent(params.userId);
-    console.log('[MEETING-V8] Request for:', userId);
+    const { searchParams } = new URL(request.url);
+    const filterEventId = searchParams.get('event_id');
+    console.log('[MEETING-V10] Request for:', userId, 'event_id:', filterEventId);
 
     // 1. Kullanıcıyı bul (email veya id)
     let allUsers: any[] = [];
@@ -45,27 +47,37 @@ export async function GET(
 
     if (allUsers.length === 0) {
       return NextResponse.json({
-        v: 'V8', error: 'Kullanıcı bulunamadı',
-        user: null, match: null, partner: null, event: null, waiting: null, roundInfo: null
+        v: 'V10', error: 'Kullanıcı bulunamadı',
+        user: null, match: null, partner: null, event: null, waiting: null, roundInfo: null, allEvents: []
       }, { status: 404 });
     }
 
-    // 2. Aktif event'leri bul
+    // 2. Tüm event'leri bul (aktif + draft dahil, kullanıcının seçim yapabilmesi için)
     const eventIds = [...new Set(allUsers.map(u => u.event_id))];
-    const { data: events } = await supabase
-      .from('events').select('*').in('id', eventIds).eq('status', 'active');
+    const { data: allEventsRaw } = await supabase.from('events').select('*').in('id', eventIds);
+    const allEventsList = (allEventsRaw || []).map(e => ({
+      id: e.id, name: e.name, status: e.status,
+      duration: e.round_duration_sec || e.duration || DEFAULT_DURATION,
+    }));
+
+    // Filter to active events (or specific event if requested)
+    let events: any[];
+    if (filterEventId) {
+      events = (allEventsRaw || []).filter(e => e.id === filterEventId);
+    } else {
+      events = (allEventsRaw || []).filter(e => e.status === 'active');
+    }
 
     if (!events || events.length === 0) {
-      // Event aktif değilse bile kullanıcı bilgisini dön
       const user = allUsers[0];
       const { data: anyEvent } = await supabase.from('events').select('*').eq('id', user.event_id).single();
       const roundInfo = await calcRoundInfo(user.event_id);
       return NextResponse.json({
-        v: 'V8',
-        user: { id: user.id, full_name: user.full_name, company: user.company, email: user.email },
+        v: 'V10',
+        user: { id: user.id, full_name: user.full_name, company: user.company, email: user.email, position: user.position || '' },
         match: null, partner: null,
         event: anyEvent ? { id: anyEvent.id, name: anyEvent.name, duration: anyEvent.round_duration_sec || anyEvent.duration || DEFAULT_DURATION, status: anyEvent.status } : null,
-        waiting: null, roundInfo
+        waiting: null, roundInfo, allEvents: allEventsList
       });
     }
 
@@ -159,8 +171,8 @@ export async function GET(
         const allStarted = pendingMatches.length === 0 && activeMatches.length > 0;
 
         return NextResponse.json({
-          v: 'V8',
-          user: { id: user.id, full_name: user.full_name, company: user.company, email: user.email },
+          v: 'V10',
+          user: { id: user.id, full_name: user.full_name, company: user.company, email: user.email, position: user.position || '' },
           match: null, partner: null,
           event: { id: event.id, name: event.name, duration: event.round_duration_sec || event.duration || DEFAULT_DURATION, status: event.status },
           waiting: {
@@ -168,16 +180,16 @@ export async function GET(
             activeCount: activeMatches.length, pendingCount: pendingMatches.length,
             totalMatches: currentRoundMatches.length, allStarted, lastStartedAt
           },
-          roundInfo
+          roundInfo, allEvents: allEventsList
         });
       }
 
       return NextResponse.json({
-        v: 'V8',
-        user: { id: user.id, full_name: user.full_name, company: user.company, email: user.email },
+        v: 'V10',
+        user: { id: user.id, full_name: user.full_name, company: user.company, email: user.email, position: user.position || '' },
         match: null, partner: null,
         event: { id: event.id, name: event.name, duration: event.round_duration_sec || event.duration || DEFAULT_DURATION, status: event.status },
-        waiting: null, roundInfo
+        waiting: null, roundInfo, allEvents: allEventsList
       });
     }
 
@@ -188,12 +200,12 @@ export async function GET(
     const roundInfo = await calcRoundInfo(bestEvent.id);
     const duration = bestEvent.round_duration_sec || bestEvent.duration || DEFAULT_DURATION;
 
-    console.log('[MEETING-V8] RESULT: Match:', bestMatch.id, 'status:', bestMatch.status,
+    console.log('[MEETING-V10] RESULT: Match:', bestMatch.id, 'status:', bestMatch.status,
       'round:', bestMatch.round_number, '/', roundInfo.max, 'partner:', partner?.full_name);
 
     return NextResponse.json({
-      v: 'V8',
-      user: { id: bestUser.id, full_name: bestUser.full_name, company: bestUser.company, email: bestUser.email },
+      v: 'V10',
+      user: { id: bestUser.id, full_name: bestUser.full_name, company: bestUser.company, email: bestUser.email, position: bestUser.position || '' },
       match: {
         id: bestMatch.id,
         status: bestMatch.status,
@@ -204,10 +216,10 @@ export async function GET(
       partner: partner ? { id: partner.id, full_name: partner.full_name, company: partner.company, email: partner.email } : null,
       event: { id: bestEvent.id, name: bestEvent.name, duration, status: bestEvent.status },
       waiting: null,
-      roundInfo
+      roundInfo, allEvents: allEventsList
     });
   } catch (error: any) {
     console.error('[MEETING-V8] Error:', error);
-    return NextResponse.json({ v: 'V8', error: error.message || 'Hata oluştu.' }, { status: 500 });
+    return NextResponse.json({ v: 'V10', error: error.message || 'Hata oluştu.' }, { status: 500 });
   }
 }
