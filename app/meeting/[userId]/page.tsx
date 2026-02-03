@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import QRCode from 'react-qr-code';
+import { QRCodeSVG as QRCode } from 'qrcode.react';
 
 interface UserData { id: string; full_name: string; company: string; email: string; }
 interface MatchData { id: string; status: string; started_at: string | null; round_number: number; icebreaker_question?: string | null; }
