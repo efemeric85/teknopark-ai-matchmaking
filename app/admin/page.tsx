@@ -611,7 +611,7 @@ export default function AdminPage() {
                     <thead>
                       <tr>
                         <th style={thStyle}></th>
-                        {users.map(u => <th key={u.id} style={{ ...thStyle, writingMode: 'vertical-rl', textOrientation: 'mixed', maxWidth: '30px' }}>{u.full_name.split(' ')[0]}</th>)}
+                        {users.map(u => <th key={u.id} style={{ ...thStyle, whiteSpace: 'nowrap', fontSize: '10px', padding: '4px 6px' }}>{u.full_name.split(' ')[0]}</th>)}
                       </tr>
                     </thead>
                     <tbody>
