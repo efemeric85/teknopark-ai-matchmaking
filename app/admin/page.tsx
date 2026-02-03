@@ -146,6 +146,9 @@ export default function AdminPage() {
   const matchedUserIds = new Set(currentRoundMatches.flatMap(m => [m.user1_id, m.user2_id]));
   const unmatchedCount = users.filter(u => !matchedUserIds.has(u.id)).length;
 
+  // Round finished check: disable Sonraki Tur when pending or active exist
+  const roundInProgress = currentRound > 0 && (pendingCount > 0 || activeCount > 0);
+
   // Matrix builder
   const buildMatrix = () => {
     const mx: Record<string, Record<string, { round: number; status: string }>> = {};
@@ -168,6 +171,15 @@ export default function AdminPage() {
   const btnPrimary: React.CSSProperties = { padding: '10px 20px', borderRadius: '10px', border: 'none', fontSize: '14px', fontWeight: 600, cursor: 'pointer', background: '#06b6d4', color: '#fff' };
   const btnDanger: React.CSSProperties = { background: '#fee2e2', border: 'none', borderRadius: '8px', padding: '6px 12px', color: '#dc2626', fontSize: '12px', fontWeight: 600, cursor: 'pointer' };
   const btnSmall: React.CSSProperties = { padding: '4px 10px', borderRadius: '6px', border: 'none', fontSize: '11px', fontWeight: 600, cursor: 'pointer', background: '#dbeafe', color: '#1d4ed8' };
+
+  // Disabled button style
+  const matchBtnDisabled = roundInProgress || loading === 'match';
+  const matchBtnStyle: React.CSSProperties = {
+    ...btnPrimary,
+    opacity: matchBtnDisabled ? 0.4 : 1,
+    cursor: matchBtnDisabled ? 'not-allowed' : 'pointer',
+    background: roundInProgress ? '#94a3b8' : '#06b6d4',
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: '#fafbfc', fontFamily: "'Inter', sans-serif", padding: '20px' }}>
@@ -265,13 +277,18 @@ export default function AdminPage() {
             {/* Match Controls */}
             <div style={C}>
               <h3 style={T}>🎯 Eşleştirme Yönetimi</h3>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button onClick={doMatch} disabled={loading === 'match'} style={{ ...btnPrimary, opacity: loading === 'match' ? 0.5 : 1 }}>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <button onClick={doMatch} disabled={matchBtnDisabled} style={matchBtnStyle}>
                   {loading === 'match' ? '⏳...' : currentRound === 0 ? '🎯 Eşleştir' : '➡️ Sonraki Tur'}
                 </button>
                 <button onClick={resetMatches} disabled={loading === 'reset'} style={{ ...btnDanger, padding: '10px 16px', fontSize: '13px' }}>
                   {loading === 'reset' ? '⏳...' : '🔄 Tümünü Sıfırla'}
                 </button>
+                {roundInProgress && (
+                  <span style={{ fontSize: '12px', color: '#dc2626', fontWeight: 500 }}>
+                    ⛔ Tur {currentRound} devam ediyor. Önce tüm eşleşmeleri tamamlayın.
+                  </span>
+                )}
               </div>
             </div>
 
@@ -335,7 +352,7 @@ export default function AdminPage() {
                 {unmatchedCount > 0 && (
                   <div style={{ marginTop: '12px', padding: '10px', borderRadius: '8px', background: '#fef3c7', border: '1px solid #fde68a' }}>
                     <p style={{ fontSize: '12px', color: '#92400e', margin: 0 }}>
-                      ⚠️ {users.filter(u2 => !matchedUserIds.has(u2.id)).map(u2 => u2.full_name).join(', ')} bu turda eşleşmedi (tek sayı katılımcı).
+                      ⚠️ {users.filter(u2 => !matchedUserIds.has(u2.id)).map(u2 => u2.full_name).join(', ')} bu turda beklemede (tek sayı katılımcı, sıradaki turda eşleşecek).
                     </p>
                   </div>
                 )}
