@@ -166,9 +166,12 @@ export default function HomePage() {
             )}
 
             <div style={cardStyle}>
-              <h3 style={{ color: '#06b6d4', fontSize: '16px', fontWeight: 600, margin: '0 0 16px', textAlign: 'center' }}>
+              <h3 style={{ color: '#06b6d4', fontSize: '16px', fontWeight: 600, margin: '0 0 12px', textAlign: 'center' }}>
                 {selectedEvent.name}
               </h3>
+              <p style={{ color: '#94a3b8', fontSize: '13px', lineHeight: '1.6', margin: '0 0 16px', textAlign: 'center' }}>
+                🎯 Rastgele değil, akıllı eşleşme. Yapay zeka, verdiğiniz bilgilere göre size en uyumlu kişilerle görüşme sırası oluşturur. Ne kadar detaylı yazarsanız, eşleşmeniz o kadar isabetli olur.
+              </p>
               <div style={{ display: 'grid', gap: '12px' }}>
                 <input placeholder="Ad Soyad *" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} style={formInputStyle} />
                 <input placeholder="E-posta *" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} style={formInputStyle} />
