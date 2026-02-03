@@ -251,19 +251,33 @@ function greedyMatch(
   const matched = new Set<string>();
   const roundMatches: { u1: string; u2: string; score: number }[] = [];
 
-  // pairScores already sorted descending by score
+  // Pass 1: greedy by score (skip previously met pairs)
   for (const pair of pairScores) {
     const key = pairKey(pair.u1, pair.u2);
-    if (usedPairs.has(key)) continue;          // already met in previous round
-    if (matched.has(pair.u1)) continue;         // already matched this round
-    if (matched.has(pair.u2)) continue;         // already matched this round
+    if (usedPairs.has(key)) continue;
+    if (matched.has(pair.u1)) continue;
+    if (matched.has(pair.u2)) continue;
 
     roundMatches.push({ u1: pair.u1, u2: pair.u2, score: pair.score });
     matched.add(pair.u1);
     matched.add(pair.u2);
   }
 
-  // Find unmatched user (odd number)
+  // Pass 2: force-pair remaining unmatched users (even if they met before)
+  const remaining = users.filter(u => !matched.has(u.id));
+  for (let i = 0; i + 1 < remaining.length; i += 2) {
+    const key = pairKey(remaining[i].id, remaining[i + 1].id);
+    const existing = pairScores.find(p => pairKey(p.u1, p.u2) === key);
+    roundMatches.push({
+      u1: remaining[i].id,
+      u2: remaining[i + 1].id,
+      score: existing?.score || 0.05,
+    });
+    matched.add(remaining[i].id);
+    matched.add(remaining[i + 1].id);
+  }
+
+  // Find single unmatched user (odd number only)
   let unmatched: string | null = null;
   for (const u of users) {
     if (!matched.has(u.id)) {
@@ -307,6 +321,10 @@ export async function POST(
       return NextResponse.json({ error: 'En az 2 katılımcı gerekli.' }, { status: 400 });
     }
 
+    // Max rounds cannot exceed n-1 (each person meets everyone)
+    const maxPossibleRounds = users.length - 1;
+    const effectiveMaxRounds = Math.min(maxRounds, maxPossibleRounds);
+
     // 3. Get existing matches
     const { data: existingMatches } = await supabase
       .from('matches').select('*').eq('event_id', eventId).order('round_number', { ascending: true });
@@ -347,10 +365,11 @@ export async function POST(
 
     // 6. Check max rounds
     const nextRound = currentMaxRound + 1;
-    if (nextRound > maxRounds) {
+    if (nextRound > effectiveMaxRounds) {
       return NextResponse.json({
-        error: `Maksimum tur sayısına (${maxRounds}) ulaşıldı. Ayarlardan artırabilirsiniz.`,
+        error: `Maksimum tur sayısına ulaşıldı. ${users.length} katılımcı ile en fazla ${maxPossibleRounds} tur yapılabilir.`,
         maxReached: true,
+        maxPossibleRounds,
       }, { status: 400 });
     }
 
@@ -402,10 +421,12 @@ export async function POST(
     return NextResponse.json({
       success: true,
       round: nextRound,
-      maxRounds,
+      maxRounds: effectiveMaxRounds,
+      maxPossibleRounds,
       matchCount: roundMatches.length,
       unmatched: unmatched ? userMap.get(unmatched)?.full_name || unmatched : null,
-      message: `Tur ${nextRound}: ${roundMatches.length} eşleşme oluşturuldu (uyumluluk bazlı).`,
+      unmatchedId: unmatched || null,
+      message: `Tur ${nextRound}: ${roundMatches.length} eşleşme oluşturuldu.${unmatched ? ' 1 kişi beklemede.' : ''}`,
       details,
     });
   } catch (error: any) {
