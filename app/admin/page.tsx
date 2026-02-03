@@ -38,6 +38,13 @@ export default function AdminPage() {
   const [msg, setMsg] = useState<{ text: string; type: string }>({ text: '', type: '' });
   const [tick, setTick] = useState(0);
 
+  // ═══ Settings State ═══
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsEmail, setSettingsEmail] = useState('');
+  const [settingsPw, setSettingsPw] = useState('');
+  const [settingsConfirmPw, setSettingsConfirmPw] = useState('');
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
   const flash = (text: string, type: string) => { setMsg({ text, type }); setTimeout(() => setMsg({ text: '', type: '' }), 4000); };
   const getDuration = () => sel?.round_duration_sec || sel?.duration || 360;
   const getMaxRounds = () => sel?.max_rounds || 5;
@@ -108,6 +115,33 @@ export default function AdminPage() {
     setAuthToken(null);
     localStorage.removeItem('adminToken');
     setSel(null); setEvents([]); setUsers([]); setMatches([]);
+  };
+
+  const handleChangeCredentials = async () => {
+    if (!settingsEmail.trim() && !settingsPw.trim()) { flash('Email veya şifre girin.', 'err'); return; }
+    if (settingsPw && settingsPw !== settingsConfirmPw) { flash('Şifreler eşleşmiyor.', 'err'); return; }
+    if (settingsPw && settingsPw.length < 4) { flash('Şifre en az 4 karakter olmalı.', 'err'); return; }
+    setSettingsLoading(true);
+    try {
+      const res = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': authToken || '' },
+        body: JSON.stringify({
+          action: 'change_credentials',
+          newEmail: settingsEmail.trim() || undefined,
+          newPassword: settingsPw.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { flash(data.error || 'Güncelleme hatası.', 'err'); setSettingsLoading(false); return; }
+      // Update token
+      setAuthToken(data.token);
+      localStorage.setItem('adminToken', data.token);
+      setSettingsEmail(''); setSettingsPw(''); setSettingsConfirmPw('');
+      setShowSettings(false);
+      flash('Admin bilgileri güncellendi.', 'ok');
+    } catch (e: any) { flash(e.message, 'err'); }
+    setSettingsLoading(false);
   };
 
   // ═══ Data loaders ═══
@@ -299,10 +333,47 @@ export default function AdminPage() {
             </span>
           )}
           <button onClick={handleLogout} style={{ ...btnSmall, background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5' }}>Çıkış</button>
+          <button onClick={() => setShowSettings(!showSettings)} style={{ ...btnSmall, background: showSettings ? '#dbeafe' : '#f1f5f9', color: '#334155', border: '1px solid #e2e8f0' }}>⚙️</button>
         </div>
       </div>
 
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '20px' }}>
+        {/* ═══ Settings Panel ═══ */}
+        {showSettings && (
+          <div style={{ ...C, marginBottom: '16px', borderColor: '#93c5fd' }}>
+            <h2 style={T}>Admin Bilgilerini Güncelle</h2>
+            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>Boş bırakılan alan değiştirilmez.</p>
+            <div style={{ display: 'grid', gap: '10px', maxWidth: '400px' }}>
+              <input
+                type="email" placeholder="Yeni email (boş bırakırsan değişmez)"
+                value={settingsEmail} onChange={e => setSettingsEmail(e.target.value)}
+                style={inputLight}
+              />
+              <input
+                type="password" placeholder="Yeni şifre"
+                value={settingsPw} onChange={e => setSettingsPw(e.target.value)}
+                style={inputLight}
+              />
+              <input
+                type="password" placeholder="Yeni şifre (tekrar)"
+                value={settingsConfirmPw} onChange={e => setSettingsConfirmPw(e.target.value)}
+                style={inputLight}
+              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={handleChangeCredentials}
+                  disabled={settingsLoading}
+                  style={{ ...btnCyan, opacity: settingsLoading ? 0.5 : 1 }}
+                >
+                  {settingsLoading ? 'Kaydediliyor...' : 'Kaydet'}
+                </button>
+                <button onClick={() => { setShowSettings(false); setSettingsEmail(''); setSettingsPw(''); setSettingsConfirmPw(''); }} style={btnSmall}>
+                  Kapat
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* ═══ Create Event ═══ */}
         <div style={C}>
           <h2 style={T}>Yeni Etkinlik</h2>
