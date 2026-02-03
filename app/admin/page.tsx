@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -37,6 +37,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ text: string; type: string }>({ text: '', type: '' });
   const [tick, setTick] = useState(0);
+  const pastRoundsRef = useRef<HTMLDivElement>(null);
+  const matrixRef = useRef<HTMLDivElement>(null);
 
   // ═══ Settings State ═══
   const [showSettings, setShowSettings] = useState(false);
@@ -253,81 +255,49 @@ export default function AdminPage() {
     if (sel) loadMatches(sel.id);
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!sel || matches.length === 0 || users.length === 0) return;
+    if (!pastRoundsRef.current || !matrixRef.current) return;
+
+    // Dynamically load html2canvas
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    document.head.appendChild(script);
+    await new Promise<void>((resolve, reject) => { script.onload = () => resolve(); script.onerror = () => reject(); });
+    const h2c = (window as any).html2canvas;
+
+    // Capture screenshots
+    const [pastImg, matrixImg] = await Promise.all([
+      h2c(pastRoundsRef.current, { backgroundColor: '#ffffff', scale: 2 }),
+      h2c(matrixRef.current, { backgroundColor: '#ffffff', scale: 2 }),
+    ]);
+
+    const pastB64 = pastImg.toDataURL('image/png');
+    const matrixB64 = matrixImg.toDataURL('image/png');
     const rounds = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b);
 
     let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="utf-8">
 <style>
-  body { font-family: -apple-system, Arial, sans-serif; font-size: 12px; }
-  h2 { color: #1e293b; font-size: 16px; margin: 20px 0 8px 0; }
-  h3 { color: #334155; font-size: 13px; margin: 16px 0 6px 0; }
+  body { font-family: Arial, sans-serif; }
+  h2 { color: #1e293b; font-size: 16px; }
   .info td { padding: 2px 8px; font-size: 12px; }
-  .info .label { font-weight: 700; color: #334155; }
-  .round-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; margin-bottom: 6px; }
-  .round-title { font-weight: 700; font-size: 13px; color: #334155; }
-  .round-count { color: #64748b; font-size: 12px; }
-  .pair-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #e0f2fe; color: #0369a1; margin: 3px 2px; }
-  .wait-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #fef3c7; color: #92400e; margin: 3px 2px; }
-  .matrix { border-collapse: collapse; font-size: 11px; }
-  .matrix th, .matrix td { border: 1px solid #e2e8f0; padding: 4px 8px; text-align: center; min-width: 35px; }
-  .matrix th { background: #f1f5f9; font-weight: 600; color: #334155; }
-  .matrix .name { text-align: left; font-weight: 600; white-space: nowrap; }
-  .matrix .self { background: #334155; }
-  .matrix .matched { background: #dcfce7; }
+  .label { font-weight: 700; }
+  img { max-width: 100%; }
 </style></head><body>`;
 
-    // Header info
     html += `<h2>⚡ ${sel.name}</h2>`;
     html += `<table class="info">
       <tr><td class="label">Tarih:</td><td>${fmtDate(sel.date)}</td></tr>
       <tr><td class="label">Katılımcı:</td><td>${users.length} kişi</td></tr>
       <tr><td class="label">Toplam Tur:</td><td>${rounds.length}</td></tr>
-    </table>`;
+    </table><br>`;
 
-    // Geçmiş Turlar - same format as admin page
     html += `<h2>Geçmiş Turlar</h2>`;
-    for (const r of rounds) {
-      const rm = matches.filter(m => m.round_number === r);
-      html += `<div class="round-box"><span class="round-title">Tur ${r}</span> <span class="round-count">${rm.length} eşleşme</span><br>`;
-      for (const m of rm) {
-        const u1 = getUserById(m.user1_id);
-        const u2 = getUserById(m.user2_id);
-        const score = m.compatibility_score ? `(%${Math.round(m.compatibility_score * 100)})` : '';
-        html += `<span class="pair-tag">${u1?.full_name || '?'} ↔ ${u2?.full_name || '?'} ${score}</span> `;
-      }
-      // Waiting user
-      if (users.length % 2 === 1) {
-        const matchedIds = new Set<string>();
-        rm.forEach(m => { matchedIds.add(m.user1_id); matchedIds.add(m.user2_id); });
-        const waiter = users.find(u => !matchedIds.has(u.id));
-        if (waiter) html += `<span class="wait-tag">⏳ ${waiter.full_name} (bekledi)</span>`;
-      }
-      html += `</div>`;
-    }
-
-    // Eşleşme Matrisi
+    html += `<img src="${pastB64}"><br><br>`;
     html += `<h2>Eşleşme Matrisi</h2>`;
-    html += `<table class="matrix"><thead><tr><th></th>`;
-    for (const u of users) html += `<th>${u.full_name.split(' ')[0]}</th>`;
-    html += `</tr></thead><tbody>`;
-    for (const row of users) {
-      html += `<tr><td class="name">${row.full_name.split(' ')[0]}</td>`;
-      for (const col of users) {
-        if (row.id === col.id) {
-          html += `<td class="self"></td>`;
-        } else {
-          const m = matches.find(m =>
-            (m.user1_id === row.id && m.user2_id === col.id) ||
-            (m.user2_id === row.id && m.user1_id === col.id)
-          );
-          html += m ? `<td class="matched">${m.round_number}</td>` : `<td></td>`;
-        }
-      }
-      html += `</tr>`;
-    }
-    html += `</tbody></table></body></html>`;
+    html += `<img src="${matrixB64}">`;
+    html += `</body></html>`;
 
     const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -689,6 +659,7 @@ export default function AdminPage() {
                       📥 Excel İndir
                     </button>
                   </div>
+                  <div ref={pastRoundsRef}>
                   {pastRounds.filter(r => r < currentRound).map(r => {
                     const rm = matches.filter(m => m.round_number === r);
                     return (
@@ -710,12 +681,14 @@ export default function AdminPage() {
                       </div>
                     );
                   })}
+                  </div>
                 </div>
               )}
 
               {matches.length > 0 && users.length > 0 && (
                 <div style={{ marginTop: '20px', overflowX: 'auto' }}>
                   <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '10px' }}>Eşleşme Matrisi</h4>
+                  <div ref={matrixRef}>
                   <table style={{ borderCollapse: 'collapse', fontSize: '11px', width: '100%' }}>
                     <thead>
                       <tr>
@@ -743,6 +716,7 @@ export default function AdminPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               )}
             </div>
