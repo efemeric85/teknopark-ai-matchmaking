@@ -45,7 +45,17 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // Race condition: UNIQUE constraint violation
+      if (error.code === '23505') {
+        return NextResponse.json({
+          error: 'Bu etkinliğe zaten kayıtlısınız.',
+          duplicate: true,
+          redirect: `/meeting/${encodeURIComponent(cleanEmail)}`,
+        }, { status: 409 });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ user: data, redirect: `/meeting/${encodeURIComponent(cleanEmail)}` });
   } catch (error: any) {
