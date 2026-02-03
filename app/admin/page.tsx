@@ -255,59 +255,86 @@ export default function AdminPage() {
     if (sel) loadMatches(sel.id);
   };
 
-  const handleExportExcel = async () => {
+  const handleExportPdf = async () => {
     if (!sel || matches.length === 0 || users.length === 0) return;
     if (!pastRoundsRef.current || !matrixRef.current) return;
 
-    // Dynamically load html2canvas
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-    document.head.appendChild(script);
-    await new Promise<void>((resolve, reject) => { script.onload = () => resolve(); script.onerror = () => reject(); });
-    const h2c = (window as any).html2canvas;
+    // Load html2canvas + jsPDF from CDN
+    const loadScript = (src: string) => new Promise<void>((res, rej) => {
+      if (document.querySelector(`script[src="${src}"]`)) return res();
+      const s = document.createElement('script'); s.src = src;
+      s.onload = () => res(); s.onerror = () => rej();
+      document.head.appendChild(s);
+    });
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
 
-    // Capture screenshots
-    const [pastImg, matrixImg] = await Promise.all([
+    const h2c = (window as any).html2canvas;
+    const { jsPDF } = (window as any).jspdf;
+
+    // Capture screenshots at 2x for crisp rendering
+    const [pastCanvas, matrixCanvas] = await Promise.all([
       h2c(pastRoundsRef.current, { backgroundColor: '#ffffff', scale: 2 }),
       h2c(matrixRef.current, { backgroundColor: '#ffffff', scale: 2 }),
     ]);
 
-    const pastB64 = pastImg.toDataURL('image/png');
-    const matrixB64 = matrixImg.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageW = pdf.internal.pageSize.getWidth();
+    const margin = 10;
+    const contentW = pageW - margin * 2;
+    let y = margin;
+
+    // Header
+    pdf.setFontSize(16);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(sel.name, margin, y + 6); y += 12;
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`Tarih: ${fmtDate(sel.date)}`, margin, y); y += 5;
+    pdf.text(`Katılımcı: ${users.length} kişi`, margin, y); y += 5;
     const rounds = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b);
+    pdf.text(`Toplam Tur: ${rounds.length}`, margin, y); y += 10;
 
-    let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8">
-<style>
-  body { font-family: Arial, sans-serif; }
-  h2 { color: #1e293b; font-size: 16px; }
-  .info td { padding: 2px 8px; font-size: 12px; }
-  .label { font-weight: 700; }
-  img { max-width: 100%; }
-</style></head><body>`;
+    // Geçmiş Turlar screenshot
+    pdf.setFontSize(13);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Geçmiş Turlar', margin, y); y += 6;
 
-    html += `<h2>⚡ ${sel.name}</h2>`;
-    html += `<table class="info">
-      <tr><td class="label">Tarih:</td><td>${fmtDate(sel.date)}</td></tr>
-      <tr><td class="label">Katılımcı:</td><td>${users.length} kişi</td></tr>
-      <tr><td class="label">Toplam Tur:</td><td>${rounds.length}</td></tr>
-    </table><br>`;
+    const pastImg = pastCanvas.toDataURL('image/png');
+    const pastRatio = pastCanvas.height / pastCanvas.width;
+    const pastW = Math.min(contentW, pastCanvas.width / 2 * 0.264583); // px to mm at 2x
+    const pastH = pastW * pastRatio;
+    const finalPastW = contentW;
+    const finalPastH = finalPastW * pastRatio;
 
-    html += `<h2>Geçmiş Turlar</h2>`;
-    html += `<img src="${pastB64}"><br><br>`;
-    html += `<h2>Eşleşme Matrisi</h2>`;
-    html += `<img src="${matrixB64}">`;
-    html += `</body></html>`;
+    // Check if it fits, otherwise add page
+    if (y + finalPastH > pdf.internal.pageSize.getHeight() - margin) {
+      pdf.addPage(); y = margin;
+    }
+    pdf.addImage(pastImg, 'PNG', margin, y, finalPastW, finalPastH);
+    y += finalPastH + 10;
 
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
+    // Eşleşme Matrisi screenshot
+    if (y + 20 > pdf.internal.pageSize.getHeight() - margin) {
+      pdf.addPage(); y = margin;
+    }
+    pdf.setFontSize(13);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Eşleşme Matrisi', margin, y); y += 6;
+
+    const matImg = matrixCanvas.toDataURL('image/png');
+    const matRatio = matrixCanvas.height / matrixCanvas.width;
+    const finalMatW = contentW;
+    const finalMatH = finalMatW * matRatio;
+
+    if (y + finalMatH > pdf.internal.pageSize.getHeight() - margin) {
+      pdf.addPage(); y = margin;
+    }
+    pdf.addImage(matImg, 'PNG', margin, y, finalMatW, finalMatH);
+
     const now = new Date();
     const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
-    a.download = `${sel.name.replace(/\s+/g, '_')}_eslesme_${ts}.xls`;
-    a.click();
-    URL.revokeObjectURL(url);
+    pdf.save(`${sel.name.replace(/\s+/g, '_')}_eslesme_${ts}.pdf`);
   };
 
   // ═══ Timer & round helpers ═══
@@ -655,8 +682,8 @@ export default function AdminPage() {
                 <div style={{ marginTop: '20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                     <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#334155', margin: 0 }}>Geçmiş Turlar</h4>
-                    <button onClick={handleExportExcel} style={{ ...btnSmall, background: '#059669', color: '#fff', fontWeight: 600, padding: '6px 14px', fontSize: '12px' }}>
-                      📥 Excel İndir
+                    <button onClick={handleExportPdf} style={{ ...btnSmall, background: '#059669', color: '#fff', fontWeight: 600, padding: '6px 14px', fontSize: '12px' }}>
+                      📥 PDF İndir
                     </button>
                   </div>
                   <div ref={pastRoundsRef}>
