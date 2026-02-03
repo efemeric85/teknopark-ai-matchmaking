@@ -18,17 +18,26 @@ const ICEBREAKERS = [
   'Bugün burada tanışmak istediğiniz kişi profili nasıl biri?',
   'Şirketinizin en güçlü yanı ne?',
   'Hangi sektörlere açılmayı düşünüyorsunuz?',
-  'Bir startup kurabilseydiniz hangi sorunu çözerdiniz?',
+  'Bir startup kursanız hangi problemi çözerdiniz?',
+  'Sektörünüzde yapay zekanın en büyük etkisi ne olacak?',
+  'İş hayatınızda sizi en çok motive eden şey ne?',
 ];
 
-// Circle method: deterministic round-robin tournament
+// Circle method: deterministic round-robin with BYE for odd participants
+// Guarantees: everyone meets everyone, no one waits 2 rounds in a row
 function generateCirclePairs(ids: string[], roundIndex: number): [string, string][] {
-  const n = ids.length;
+  const players = [...ids].sort();
+  const isOdd = players.length % 2 !== 0;
+
+  // Odd number: add BYE placeholder so circle method works correctly
+  if (isOdd) players.push('__BYE__');
+
+  const n = players.length;
   if (n < 2) return [];
 
-  const fixed = ids[0];
-  const rotating = ids.slice(1);
-  const m = rotating.length;
+  const fixed = players[0];
+  const rotating = players.slice(1);
+  const m = rotating.length; // always odd when original was even, even when original was odd+BYE
 
   // Rotate array by roundIndex positions
   const rotated: string[] = [];
@@ -37,12 +46,18 @@ function generateCirclePairs(ids: string[], roundIndex: number): [string, string
   }
 
   const pairs: [string, string][] = [];
-  // Fixed vs first rotated
-  pairs.push([fixed, rotated[0]]);
-  // Remaining pairs from ends inward
+
+  // Fixed vs first rotated (skip if BYE)
+  if (fixed !== '__BYE__' && rotated[0] !== '__BYE__') {
+    pairs.push([fixed, rotated[0]]);
+  }
+
+  // Remaining pairs from ends inward (skip any pair containing BYE)
   for (let i = 1; i <= Math.floor(m / 2); i++) {
-    if (i < m - i + 1) {
-      pairs.push([rotated[i], rotated[m - i]]);
+    const a = rotated[i];
+    const b = rotated[m - i];
+    if (a !== '__BYE__' && b !== '__BYE__') {
+      pairs.push([a, b]);
     }
   }
 
@@ -80,7 +95,7 @@ export async function POST(
     const existingMatches = allMatches || [];
     const maxExistingRound = existingMatches.length > 0 ? existingMatches[0].round_number : 0;
 
-    // Mevcut turda tamamlanmamış eşleşme var mı?
+    // Mevcut turda tamamlanmamış eşleşme var mı? (STRICT CHECK)
     if (maxExistingRound > 0) {
       const currentRound = existingMatches.filter(m => m.round_number === maxExistingRound);
       const duration = event.round_duration_sec || event.duration || 360;
@@ -100,13 +115,14 @@ export async function POST(
       const active = currentRound.filter(m => m.status === 'active');
       if (pending.length > 0 || active.length > 0) {
         return NextResponse.json({
-          error: `Tur ${maxExistingRound} henüz tamamlanmadı! ${pending.length} bekleyen, ${active.length} aktif eşleşme var.`
+          error: `Tur ${maxExistingRound} henüz tamamlanmadı! ${pending.length} bekleyen, ${active.length} aktif eşleşme var. Önce mevcut turu tamamlayın.`
         }, { status: 400 });
       }
     }
 
     // Max tur hesapla
     const n = users.length;
+    // n even: n-1 rounds, n odd: n rounds (with BYE, effectively n-1 rounds but each person sits out once)
     const maxRounds = n % 2 === 0 ? n - 1 : n;
 
     if (maxExistingRound >= maxRounds) {
@@ -146,10 +162,11 @@ export async function POST(
       maxRounds,
       matchCount: pairs.length,
       waitingCount: waitingParticipants.length,
-      message: `Tur ${newRound}/${maxRounds}: ${pairs.length} eşleşme oluşturuldu.${waitingParticipants.length > 0 ? ' ' + waitingParticipants.length + ' kişi beklemede.' : ''} QR okutmayı bekliyor.`,
+      waitingNames: waitingParticipants.map(u => u.full_name),
+      message: `Tur ${newRound}/${maxRounds}: ${pairs.length} eşleşme oluşturuldu.${waitingParticipants.length > 0 ? ' ' + waitingParticipants.map(u => u.full_name).join(', ') + ' bu turda beklemede.' : ''} QR okutmayı bekliyor.`,
     });
   } catch (error: any) {
-    console.error('[MATCH-ROUTE-V8] Error:', error);
+    console.error('[MATCH-ROUTE-V9] Error:', error);
     return NextResponse.json({ error: error.message || 'Eşleştirme hatası.' }, { status: 500 });
   }
 }
