@@ -243,6 +243,71 @@ export default function AdminPage() {
     if (sel) loadMatches(sel.id);
   };
 
+  const handleStartAll = async () => {
+    const pendingIds = currentRoundMatches.filter(m => m.status === 'pending').map(m => m.id);
+    if (pendingIds.length === 0) return;
+    const now = new Date().toISOString();
+    await supabase.from('matches')
+      .update({ status: 'active', started_at: now })
+      .in('id', pendingIds);
+    if (sel) loadMatches(sel.id);
+  };
+
+  const handleExportExcel = () => {
+    if (!sel || matches.length === 0 || users.length === 0) return;
+    const rounds = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b);
+
+    // Sheet 1: Tur detayları (CSV)
+    let csv = '\uFEFF'; // BOM for Turkish chars in Excel
+    csv += 'Etkinlik:,' + sel.name + '\n';
+    csv += 'Tarih:,' + fmtDate(sel.date) + '\n';
+    csv += 'Katılımcı Sayısı:,' + users.length + '\n';
+    csv += 'Toplam Tur:,' + rounds.length + '\n\n';
+
+    // Tur detayları
+    csv += 'Tur,Kişi 1,Şirket 1,Kişi 2,Şirket 2,Uyum %\n';
+    for (const r of rounds) {
+      const rm = matches.filter(m => m.round_number === r);
+      for (const m of rm) {
+        const u1 = getUserById(m.user1_id);
+        const u2 = getUserById(m.user2_id);
+        const score = m.compatibility_score ? Math.round(m.compatibility_score * 100) : '';
+        csv += `${r},"${u1?.full_name || '?'}","${u1?.company || ''}","${u2?.full_name || '?'}","${u2?.company || ''}",${score}\n`;
+      }
+      // Show who waited this round (odd participant count)
+      if (users.length % 2 === 1) {
+        const matchedIds = new Set<string>();
+        rm.forEach(m => { matchedIds.add(m.user1_id); matchedIds.add(m.user2_id); });
+        const waiter = users.find(u => !matchedIds.has(u.id));
+        if (waiter) csv += `${r},"${waiter.full_name}","${waiter.company}",BEKLEME,,\n`;
+      }
+    }
+
+    // Eşleşme Matrisi
+    csv += '\n\nEşleşme Matrisi\n';
+    csv += ',' + users.map(u => '"' + u.full_name.split(' ')[0] + '"').join(',') + '\n';
+    for (const row of users) {
+      csv += '"' + row.full_name.split(' ')[0] + '"';
+      for (const col of users) {
+        if (row.id === col.id) { csv += ',-'; continue; }
+        const m = matches.find(m =>
+          (m.user1_id === row.id && m.user2_id === col.id) ||
+          (m.user2_id === row.id && m.user1_id === col.id)
+        );
+        csv += ',' + (m ? m.round_number : '');
+      }
+      csv += '\n';
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${sel.name.replace(/\s+/g, '_')}_eslesme_raporu.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // ═══ Timer & round helpers ═══
   const calcRemaining = (m: Match): number => {
     if (!m.started_at) return getDuration();
@@ -526,7 +591,14 @@ export default function AdminPage() {
 
               {currentRound > 0 && currentRoundMatches.length > 0 && (
                 <div style={{ marginTop: '16px' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '10px' }}>Tur {currentRound} Eşleşmeleri</h4>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#334155', margin: 0 }}>Tur {currentRound} Eşleşmeleri</h4>
+                    {pendingCount > 0 && (
+                      <button onClick={handleStartAll} style={{ ...btnSmall, background: '#10b981', color: '#fff', fontWeight: 600, padding: '6px 16px' }}>
+                        ▶ Hepsini Başlat ({pendingCount})
+                      </button>
+                    )}
+                  </div>
                   <div style={{ display: 'grid', gap: '8px' }}>
                     {currentRoundMatches.map(m => {
                       const u1 = getUserById(m.user1_id);
@@ -579,7 +651,12 @@ export default function AdminPage() {
 
               {pastRounds.length > 1 && (
                 <div style={{ marginTop: '20px' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '10px' }}>Geçmiş Turlar</h4>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#334155', margin: 0 }}>Geçmiş Turlar</h4>
+                    <button onClick={handleExportExcel} style={{ ...btnSmall, background: '#059669', color: '#fff', fontWeight: 600, padding: '6px 14px', fontSize: '12px' }}>
+                      📥 Excel İndir
+                    </button>
+                  </div>
                   {pastRounds.filter(r => r < currentRound).map(r => {
                     const rm = matches.filter(m => m.round_number === r);
                     return (
