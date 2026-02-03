@@ -255,7 +255,7 @@ export default function AdminPage() {
   const currentRoundMatches = matches.filter(m => m.round_number === currentRound);
   const allCurrentDone = currentRound > 0 && currentRoundMatches.every(m => m.status === 'completed' || isExpired(m));
   const hasRunning = currentRoundMatches.some(m => (m.status === 'pending' || m.status === 'active') && !isExpired(m));
-  const maxPossibleRounds = users.length > 1 ? users.length - 1 : 1;
+  const maxPossibleRounds = users.length < 2 ? 0 : (users.length % 2 === 0 ? users.length - 1 : users.length);
   const effectiveMaxRounds = Math.min(getMaxRounds(), maxPossibleRounds);
   const maxRoundsReached = currentRound >= effectiveMaxRounds;
 
