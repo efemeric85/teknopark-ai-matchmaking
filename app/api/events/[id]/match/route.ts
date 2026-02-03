@@ -246,10 +246,39 @@ function pairKey(a: string, b: string): string {
 function greedyMatch(
   users: UserRow[],
   pairScores: PairScore[],
-  usedPairs: Set<string>
+  usedPairs: Set<string>,
+  mustMatchId: string | null = null
 ): { matches: { u1: string; u2: string; score: number }[]; unmatched: string | null } {
   const matched = new Set<string>();
   const roundMatches: { u1: string; u2: string; score: number }[] = [];
+
+  // Pass 0: If mustMatchId exists (prev round's waiting person), match them FIRST
+  if (mustMatchId) {
+    let bestPair: PairScore | null = null;
+    // Find best available partner for mustMatch user
+    for (const pair of pairScores) {
+      if (pair.u1 !== mustMatchId && pair.u2 !== mustMatchId) continue;
+      const key = pairKey(pair.u1, pair.u2);
+      if (usedPairs.has(key)) continue;
+      if (!bestPair || pair.score > bestPair.score) {
+        bestPair = pair;
+      }
+    }
+    // If no unused pair found, force-pair with anyone available
+    if (!bestPair) {
+      const partner = users.find(u => u.id !== mustMatchId);
+      if (partner) {
+        const key = pairKey(mustMatchId, partner.id);
+        const existing = pairScores.find(p => pairKey(p.u1, p.u2) === key);
+        bestPair = { u1: mustMatchId, u2: partner.id, score: existing?.score || 0.05 };
+      }
+    }
+    if (bestPair) {
+      roundMatches.push({ u1: bestPair.u1, u2: bestPair.u2, score: bestPair.score });
+      matched.add(bestPair.u1);
+      matched.add(bestPair.u2);
+    }
+  }
 
   // Pass 1: greedy by score (skip previously met pairs)
   for (const pair of pairScores) {
@@ -382,9 +411,27 @@ export async function POST(
     // 8. Calculate all pair scores
     const pairScores = scoreAllPairs(users as UserRow[]);
 
-    // 9. Greedy match
+    // 8.5. Find previous round's unmatched person (must not wait again)
+    let prevUnmatchedId: string | null = null;
+    if (currentMaxRound > 0 && users.length % 2 === 1) {
+      const prevRoundMatches = allMatches.filter(m => m.round_number === currentMaxRound);
+      const prevMatchedIds = new Set<string>();
+      for (const m of prevRoundMatches) {
+        prevMatchedIds.add(m.user1_id);
+        prevMatchedIds.add(m.user2_id);
+      }
+      const userIds = new Set(users.map(u => u.id));
+      for (const uid of userIds) {
+        if (!prevMatchedIds.has(uid)) {
+          prevUnmatchedId = uid;
+          break;
+        }
+      }
+    }
+
+    // 9. Greedy match (prev waiting person gets priority)
     const { matches: roundMatches, unmatched } = greedyMatch(
-      users as UserRow[], pairScores, usedPairs
+      users as UserRow[], pairScores, usedPairs, prevUnmatchedId
     );
 
     if (roundMatches.length === 0) {
