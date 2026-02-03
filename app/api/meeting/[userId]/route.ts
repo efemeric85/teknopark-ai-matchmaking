@@ -33,7 +33,7 @@ export async function GET(
     const userId = decodeURIComponent(params.userId);
     const { searchParams } = new URL(request.url);
     const filterEventId = searchParams.get('event_id');
-    console.log('[MEETING-V10] Request for:', userId, 'event_id:', filterEventId);
+    console.log('[MEETING-V11] Request for:', userId, 'event_id:', filterEventId);
 
     // 1. Kullanıcıyı bul (email veya id)
     let allUsers: any[] = [];
@@ -47,26 +47,24 @@ export async function GET(
 
     if (allUsers.length === 0) {
       return NextResponse.json({
-        v: 'V10', error: 'Kullanıcı bulunamadı',
+        v: 'V11', error: 'Kullanıcı bulunamadı',
         user: null, match: null, partner: null, event: null, waiting: null, roundInfo: null, allEvents: []
       }, { status: 404 });
     }
 
-    // 2. Tüm event'leri bul (aktif + draft dahil, kullanıcının seçim yapabilmesi için)
-    const eventIds = [...new Set(allUsers.map(u => u.event_id))];
+    // 2. Tüm event'leri bul (aktif + draft dahil)
+    const eventIds = [...new Set(allUsers.map(u => u.event_id).filter(Boolean))];
     const { data: allEventsRaw } = await supabase.from('events').select('*').in('id', eventIds);
     const allEventsList = (allEventsRaw || []).map(e => ({
       id: e.id, name: e.name, status: e.status,
       duration: e.round_duration_sec || e.duration || DEFAULT_DURATION,
     }));
 
-    // Filter events: if specific event requested use it, otherwise use ALL events
-    // Event status (active/draft) only controls registration, not match visibility
+    // Filter events: specific > active > all
     let events: any[];
     if (filterEventId) {
       events = (allEventsRaw || []).filter(e => e.id === filterEventId);
     } else {
-      // Prefer active events, but fall back to all events if no active ones
       const activeEvents = (allEventsRaw || []).filter(e => e.status === 'active');
       events = activeEvents.length > 0 ? activeEvents : (allEventsRaw || []);
     }
@@ -74,9 +72,9 @@ export async function GET(
     if (!events || events.length === 0) {
       const user = allUsers[0];
       const { data: anyEvent } = await supabase.from('events').select('*').eq('id', user.event_id).single();
-      const roundInfo = await calcRoundInfo(user.event_id);
+      const roundInfo = user.event_id ? await calcRoundInfo(user.event_id) : null;
       return NextResponse.json({
-        v: 'V10',
+        v: 'V11',
         user: { id: user.id, full_name: user.full_name, company: user.company, email: user.email, position: user.position || '' },
         match: null, partner: null,
         event: anyEvent ? { id: anyEvent.id, name: anyEvent.name, duration: anyEvent.round_duration_sec || anyEvent.duration || DEFAULT_DURATION, status: anyEvent.status } : null,
@@ -84,16 +82,15 @@ export async function GET(
       });
     }
 
-    // 3. Tüm match'leri çek - TÜM user ID'leri kullan (duplicate email durumu için)
+    // 3. Tüm match'leri çek - TÜM user ID'leri kullan (aynı email farklı event'ler)
     const allUserIds = allUsers.map(u => u.id);
-    const activeEventIds = events.map(e => e.id);
 
     const { data: allMatches } = await supabase
       .from('matches').select('*')
       .or(allUserIds.map(id => `user1_id.eq.${id},user2_id.eq.${id}`).join(','))
       .order('round_number', { ascending: false });
 
-    // ═══ BUG 14 FIX: Auto-complete expired active matches ═══
+    // ═══ Auto-complete expired active matches ═══
     const eventDurationMap = new Map((allEventsRaw || []).map((e: any) => [e.id, e.round_duration_sec || e.duration || DEFAULT_DURATION]));
     const now = Date.now();
     const expiredIds: string[] = [];
@@ -102,15 +99,15 @@ export async function GET(
         const dur = eventDurationMap.get(m.event_id) || DEFAULT_DURATION;
         if ((now - new Date(m.started_at).getTime()) / 1000 >= dur) {
           expiredIds.push(m.id);
-          m.status = 'completed'; // Update local copy for correct scoring below
+          m.status = 'completed';
         }
       }
     }
     if (expiredIds.length > 0) {
       await supabase.from('matches').update({ status: 'completed' }).in('id', expiredIds);
     }
-    // ═══ END BUG 14 FIX ═══
 
+    // Best match scoring - allEventsRaw'dan event ara (dar filtre sorunu)
     let bestMatch: any = null;
     let bestUser: any = null;
     let bestEvent: any = null;
@@ -125,20 +122,20 @@ export async function GET(
       let score = 0;
 
       if (m.status === 'pending') {
-        score = 100 + m.round_number; // Pending = en yüksek öncelik
+        score = 100 + m.round_number;
       } else if (m.status === 'active') {
         if (m.started_at) {
           const elapsed = (Date.now() - new Date(m.started_at).getTime()) / 1000;
           if (elapsed < duration) {
-            score = 50 + m.round_number; // Aktif ve süresi devam ediyor
+            score = 50 + m.round_number;
           } else {
-            score = -10 + m.round_number; // Süresi dolmuş
+            score = -10 + m.round_number;
           }
         } else {
-          score = 80 + m.round_number; // Aktif ama started_at yok (garip durum)
+          score = 80 + m.round_number;
         }
       } else if (m.status === 'completed') {
-        score = -50 + m.round_number; // Tamamlanmış
+        score = -50 + m.round_number;
       }
 
       if (score > bestScore) {
@@ -151,12 +148,48 @@ export async function GET(
 
     // 4. Eşleşme bulunamadı - waiting state kontrolü
     if (!bestMatch || !bestUser || !bestEvent) {
-      const event = events[0];
-      const user = allUsers.find(u => u.event_id === event.id) || allUsers[0];
-      const roundInfo = await calcRoundInfo(event.id);
+      // Doğru event'i bul: filterEventId > match olan event > ilk event
+      let waitEvent: any = null;
+      let waitUser = allUsers[0];
+
+      if (filterEventId) {
+        waitEvent = (allEventsRaw || []).find((e: any) => e.id === filterEventId);
+        waitUser = allUsers.find(u => u.event_id === filterEventId) || allUsers[0];
+      }
+
+      // filterEventId yoksa veya event bulunamadıysa, match olan event'i ara
+      if (!waitEvent) {
+        for (const ev of (allEventsRaw || [])) {
+          const usr = allUsers.find(u => u.event_id === ev.id);
+          if (!usr) continue;
+          const { count } = await supabase
+            .from('matches').select('id', { count: 'exact', head: true }).eq('event_id', ev.id);
+          if (count && count > 0) {
+            waitEvent = ev;
+            waitUser = usr;
+            break;
+          }
+        }
+      }
+
+      // Hala bulunamadıysa ilk event'i kullan
+      if (!waitEvent) {
+        waitEvent = events[0] || (allEventsRaw || [])[0];
+        waitUser = allUsers.find(u => u.event_id === waitEvent?.id) || allUsers[0];
+      }
+
+      if (!waitEvent) {
+        return NextResponse.json({
+          v: 'V11',
+          user: { id: waitUser.id, full_name: waitUser.full_name, company: waitUser.company, email: waitUser.email, position: waitUser.position || '' },
+          match: null, partner: null, event: null, waiting: null, roundInfo: null, allEvents: allEventsList
+        });
+      }
+
+      const roundInfo = await calcRoundInfo(waitEvent.id);
 
       const { data: allEventMatches } = await supabase
-        .from('matches').select('*').eq('event_id', event.id)
+        .from('matches').select('*').eq('event_id', waitEvent.id)
         .order('round_number', { ascending: false });
 
       if (allEventMatches && allEventMatches.length > 0) {
@@ -164,19 +197,21 @@ export async function GET(
         const currentRoundMatches = allEventMatches.filter(m => m.round_number === maxRound);
         const activeMatches = currentRoundMatches.filter(m => m.status === 'active');
         const pendingMatches = currentRoundMatches.filter(m => m.status === 'pending');
+        const completedMatches = currentRoundMatches.filter(m => m.status === 'completed');
 
         const startedMatches = currentRoundMatches.filter(m => m.started_at);
         const lastStartedAt = startedMatches.length > 0
           ? startedMatches.sort((a: any, b: any) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())[0].started_at
           : null;
 
-        const allStarted = pendingMatches.length === 0 && activeMatches.length > 0;
+        // FIX: completed match'leri de say - match'ler bittikten sonra timer kaybolmuyordu
+        const allStarted = pendingMatches.length === 0 && (activeMatches.length > 0 || completedMatches.length > 0);
 
         return NextResponse.json({
-          v: 'V10',
-          user: { id: user.id, full_name: user.full_name, company: user.company, email: user.email, position: user.position || '' },
+          v: 'V11',
+          user: { id: waitUser.id, full_name: waitUser.full_name, company: waitUser.company, email: waitUser.email, position: waitUser.position || '' },
           match: null, partner: null,
-          event: { id: event.id, name: event.name, duration: event.round_duration_sec || event.duration || DEFAULT_DURATION, status: event.status },
+          event: { id: waitEvent.id, name: waitEvent.name, duration: waitEvent.round_duration_sec || waitEvent.duration || DEFAULT_DURATION, status: waitEvent.status },
           waiting: {
             isWaiting: true, roundNumber: maxRound,
             activeCount: activeMatches.length, pendingCount: pendingMatches.length,
@@ -187,10 +222,10 @@ export async function GET(
       }
 
       return NextResponse.json({
-        v: 'V10',
-        user: { id: user.id, full_name: user.full_name, company: user.company, email: user.email, position: user.position || '' },
+        v: 'V11',
+        user: { id: waitUser.id, full_name: waitUser.full_name, company: waitUser.company, email: waitUser.email, position: waitUser.position || '' },
         match: null, partner: null,
-        event: { id: event.id, name: event.name, duration: event.round_duration_sec || event.duration || DEFAULT_DURATION, status: event.status },
+        event: { id: waitEvent.id, name: waitEvent.name, duration: waitEvent.round_duration_sec || waitEvent.duration || DEFAULT_DURATION, status: waitEvent.status },
         waiting: null, roundInfo, allEvents: allEventsList
       });
     }
@@ -202,11 +237,11 @@ export async function GET(
     const roundInfo = await calcRoundInfo(bestEvent.id);
     const duration = bestEvent.round_duration_sec || bestEvent.duration || DEFAULT_DURATION;
 
-    console.log('[MEETING-V10] RESULT: Match:', bestMatch.id, 'status:', bestMatch.status,
+    console.log('[MEETING-V11] RESULT: Match:', bestMatch.id, 'status:', bestMatch.status,
       'round:', bestMatch.round_number, '/', roundInfo.max, 'partner:', partner?.full_name);
 
     return NextResponse.json({
-      v: 'V10',
+      v: 'V11',
       user: { id: bestUser.id, full_name: bestUser.full_name, company: bestUser.company, email: bestUser.email, position: bestUser.position || '' },
       match: {
         id: bestMatch.id,
@@ -221,7 +256,7 @@ export async function GET(
       roundInfo, allEvents: allEventsList
     });
   } catch (error: any) {
-    console.error('[MEETING-V8] Error:', error);
-    return NextResponse.json({ v: 'V10', error: error.message || 'Hata oluştu.' }, { status: 500 });
+    console.error('[MEETING-V11] Error:', error);
+    return NextResponse.json({ v: 'V11', error: error.message || 'Hata oluştu.' }, { status: 500 });
   }
 }
