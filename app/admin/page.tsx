@@ -176,7 +176,7 @@ export default function AdminPage() {
       duration: newDuration,
       round_duration_sec: newDuration,
       max_rounds: newMaxRounds,
-      status: 'active',
+      status: 'draft',
     });
     if (error) flash('Hata: ' + error.message, 'err');
     else { flash('Etkinlik oluşturuldu.', 'ok'); setNewName(''); setNewDate(''); setNewDuration(360); setNewMaxRounds(5); loadEvents(); }
@@ -255,11 +255,18 @@ export default function AdminPage() {
   const currentRoundMatches = matches.filter(m => m.round_number === currentRound);
   const allCurrentDone = currentRound > 0 && currentRoundMatches.every(m => m.status === 'completed' || isExpired(m));
   const hasRunning = currentRoundMatches.some(m => (m.status === 'pending' || m.status === 'active') && !isExpired(m));
-  const maxRoundsReached = currentRound >= getMaxRounds();
+  const maxPossibleRounds = users.length > 1 ? users.length - 1 : 1;
+  const effectiveMaxRounds = Math.min(getMaxRounds(), maxPossibleRounds);
+  const maxRoundsReached = currentRound >= effectiveMaxRounds;
 
   const pendingCount = currentRoundMatches.filter(m => m.status === 'pending').length;
   const activeCount = currentRoundMatches.filter(m => m.status === 'active' && !isExpired(m)).length;
   const completedCount = currentRoundMatches.filter(m => m.status === 'completed' || isExpired(m)).length;
+
+  // Find unmatched/waiting user (odd number participant)
+  const matchedUserIds = new Set<string>();
+  currentRoundMatches.forEach(m => { matchedUserIds.add(m.user1_id); matchedUserIds.add(m.user2_id); });
+  const waitingUser = currentRound > 0 ? users.find(u => !matchedUserIds.has(u.id)) : null;
 
   const pastRounds = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b);
 
@@ -331,6 +338,7 @@ export default function AdminPage() {
               {msg.text}
             </span>
           )}
+          <a href="/" style={{ ...btnSmall, background: '#f0fdfa', color: '#0e7490', border: '1px solid #06b6d4', textDecoration: 'none', display: 'inline-block' }}>🏠 Anasayfa</a>
           <button onClick={handleLogout} style={{ ...btnSmall, background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5' }}>Çıkış</button>
           <button onClick={() => setShowSettings(!showSettings)} style={{ ...btnSmall, background: showSettings ? '#dbeafe' : '#f1f5f9', color: '#334155', border: '1px solid #e2e8f0' }}>⚙️</button>
         </div>
@@ -444,9 +452,10 @@ export default function AdminPage() {
                       <div>
                         <span style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>{p.full_name}</span>
                         <span style={{ color: '#64748b', fontSize: '12px', marginLeft: '8px' }}>{p.company}</span>
+                        <span style={{ color: '#94a3b8', fontSize: '11px', marginLeft: '8px' }}>{p.email}</span>
                       </div>
                       <span style={{ color: '#94a3b8', fontSize: '11px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {p.current_intent || p.email}
+                        {p.current_intent || ''}
                       </span>
                     </div>
                   ))}
@@ -461,19 +470,25 @@ export default function AdminPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '10px', background: maxRoundsReached ? '#fef3c7' : '#f0fdfa', border: `1px solid ${maxRoundsReached ? '#fbbf24' : '#06b6d4'}` }}>
                     <span style={{ fontSize: '13px', fontWeight: 700, color: maxRoundsReached ? '#92400e' : '#0e7490' }}>
-                      Tur {currentRound} / {getMaxRounds()}
+                      Tur {currentRound} / {effectiveMaxRounds}
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <label style={{ fontSize: '11px', color: '#94a3b8' }}>Maks:</label>
                     <input
-                      type="number" min={1} max={50} value={getMaxRounds()}
+                      type="number" min={1} max={maxPossibleRounds} value={getMaxRounds()}
                       onChange={e => updateMaxRounds(parseInt(e.target.value) || 5)}
                       style={{ width: '50px', padding: '4px 6px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '12px', textAlign: 'center' }}
                     />
                   </div>
                 </div>
               </div>
+
+              {getMaxRounds() > maxPossibleRounds && users.length > 0 && (
+                <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '8px', padding: '8px 12px', marginBottom: '12px' }}>
+                  <p style={{ color: '#92400e', fontSize: '12px', margin: 0 }}>⚠️ {users.length} katılımcı ile en fazla {maxPossibleRounds} tur yapılabilir.</p>
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 <button
@@ -493,10 +508,19 @@ export default function AdminPage() {
               </div>
 
               {currentRound > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: waitingUser ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)', gap: '10px', marginTop: '16px' }}>
                   <StatBox label="Bekleyen" value={pendingCount} color="#f59e0b" />
                   <StatBox label="Aktif" value={activeCount} color="#10b981" />
                   <StatBox label="Tamamlanan" value={completedCount} color="#06b6d4" />
+                  {waitingUser && <StatBox label="Beklemede" value={1} color="#8b5cf6" />}
+                </div>
+              )}
+
+              {waitingUser && currentRound > 0 && (
+                <div style={{ background: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: '10px', padding: '10px 14px', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>⏳</span>
+                  <span style={{ fontSize: '13px', color: '#5b21b6', fontWeight: 600 }}>{waitingUser.full_name}</span>
+                  <span style={{ fontSize: '12px', color: '#7c3aed' }}>({waitingUser.company}) bu turda beklemede</span>
                 </div>
               )}
 
