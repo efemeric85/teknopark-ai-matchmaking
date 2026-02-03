@@ -697,13 +697,13 @@ export default function AdminPage() {
               {pastRounds.length > 1 && (
                 <div style={{ marginTop: '20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#334155', margin: 0 }}>Geçmiş Turlar</h4>
+                    <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#334155', margin: 0 }}>Tüm Turlar</h4>
                     <button onClick={handleExportPdf} style={{ ...btnSmall, background: '#059669', color: '#fff', fontWeight: 600, padding: '6px 14px', fontSize: '12px' }}>
                       📥 PDF İndir
                     </button>
                   </div>
                   <div ref={pastRoundsRef}>
-                  {pastRounds.filter(r => r < currentRound).map(r => {
+                  {pastRounds.filter(r => r < currentRound || allCurrentDone || maxRoundsReached).map(r => {
                     const rm = matches.filter(m => m.round_number === r);
                     return (
                       <div key={r} style={{ padding: '8px 12px', borderRadius: '8px', background: '#f8fafc', marginBottom: '6px', border: '1px solid #e2e8f0' }}>
