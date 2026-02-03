@@ -257,55 +257,85 @@ export default function AdminPage() {
     if (!sel || matches.length === 0 || users.length === 0) return;
     const rounds = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b);
 
-    // Sheet 1: Tur detayları (CSV)
-    let csv = '\uFEFF'; // BOM for Turkish chars in Excel
-    csv += 'Etkinlik:,' + sel.name + '\n';
-    csv += 'Tarih:,' + fmtDate(sel.date) + '\n';
-    csv += 'Katılımcı Sayısı:,' + users.length + '\n';
-    csv += 'Toplam Tur:,' + rounds.length + '\n\n';
+    let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8">
+<style>
+  body { font-family: -apple-system, Arial, sans-serif; font-size: 12px; }
+  h2 { color: #1e293b; font-size: 16px; margin: 20px 0 8px 0; }
+  h3 { color: #334155; font-size: 13px; margin: 16px 0 6px 0; }
+  .info td { padding: 2px 8px; font-size: 12px; }
+  .info .label { font-weight: 700; color: #334155; }
+  .round-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; margin-bottom: 6px; }
+  .round-title { font-weight: 700; font-size: 13px; color: #334155; }
+  .round-count { color: #64748b; font-size: 12px; }
+  .pair-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #e0f2fe; color: #0369a1; margin: 3px 2px; }
+  .wait-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #fef3c7; color: #92400e; margin: 3px 2px; }
+  .matrix { border-collapse: collapse; font-size: 11px; }
+  .matrix th, .matrix td { border: 1px solid #e2e8f0; padding: 4px 8px; text-align: center; min-width: 35px; }
+  .matrix th { background: #f1f5f9; font-weight: 600; color: #334155; }
+  .matrix .name { text-align: left; font-weight: 600; white-space: nowrap; }
+  .matrix .self { background: #334155; }
+  .matrix .matched { background: #dcfce7; }
+</style></head><body>`;
 
-    // Tur detayları
-    csv += 'Tur,Kişi 1,Şirket 1,Kişi 2,Şirket 2,Uyum %\n';
+    // Header info
+    html += `<h2>⚡ ${sel.name}</h2>`;
+    html += `<table class="info">
+      <tr><td class="label">Tarih:</td><td>${fmtDate(sel.date)}</td></tr>
+      <tr><td class="label">Katılımcı:</td><td>${users.length} kişi</td></tr>
+      <tr><td class="label">Toplam Tur:</td><td>${rounds.length}</td></tr>
+    </table>`;
+
+    // Geçmiş Turlar - same format as admin page
+    html += `<h2>Geçmiş Turlar</h2>`;
     for (const r of rounds) {
       const rm = matches.filter(m => m.round_number === r);
+      html += `<div class="round-box"><span class="round-title">Tur ${r}</span> <span class="round-count">${rm.length} eşleşme</span><br>`;
       for (const m of rm) {
         const u1 = getUserById(m.user1_id);
         const u2 = getUserById(m.user2_id);
-        const score = m.compatibility_score ? Math.round(m.compatibility_score * 100) : '';
-        csv += `${r},"${u1?.full_name || '?'}","${u1?.company || ''}","${u2?.full_name || '?'}","${u2?.company || ''}",${score}\n`;
+        const score = m.compatibility_score ? `(%${Math.round(m.compatibility_score * 100)})` : '';
+        html += `<span class="pair-tag">${u1?.full_name || '?'} ↔ ${u2?.full_name || '?'} ${score}</span> `;
       }
-      // Show who waited this round (odd participant count)
+      // Waiting user
       if (users.length % 2 === 1) {
         const matchedIds = new Set<string>();
         rm.forEach(m => { matchedIds.add(m.user1_id); matchedIds.add(m.user2_id); });
         const waiter = users.find(u => !matchedIds.has(u.id));
-        if (waiter) csv += `${r},"${waiter.full_name}","${waiter.company}",BEKLEME,,\n`;
+        if (waiter) html += `<span class="wait-tag">⏳ ${waiter.full_name} (bekledi)</span>`;
       }
+      html += `</div>`;
     }
 
     // Eşleşme Matrisi
-    csv += '\n\nEşleşme Matrisi\n';
-    csv += ',' + users.map(u => '"' + u.full_name.split(' ')[0] + '"').join(',') + '\n';
+    html += `<h2>Eşleşme Matrisi</h2>`;
+    html += `<table class="matrix"><thead><tr><th></th>`;
+    for (const u of users) html += `<th>${u.full_name.split(' ')[0]}</th>`;
+    html += `</tr></thead><tbody>`;
     for (const row of users) {
-      csv += '"' + row.full_name.split(' ')[0] + '"';
+      html += `<tr><td class="name">${row.full_name.split(' ')[0]}</td>`;
       for (const col of users) {
-        if (row.id === col.id) { csv += ',-'; continue; }
-        const m = matches.find(m =>
-          (m.user1_id === row.id && m.user2_id === col.id) ||
-          (m.user2_id === row.id && m.user1_id === col.id)
-        );
-        csv += ',' + (m ? m.round_number : '');
+        if (row.id === col.id) {
+          html += `<td class="self"></td>`;
+        } else {
+          const m = matches.find(m =>
+            (m.user1_id === row.id && m.user2_id === col.id) ||
+            (m.user2_id === row.id && m.user1_id === col.id)
+          );
+          html += m ? `<td class="matched">${m.round_number}</td>` : `<td></td>`;
+        }
       }
-      csv += '\n';
+      html += `</tr>`;
     }
+    html += `</tbody></table></body></html>`;
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     const now = new Date();
     const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
-    a.download = `${sel.name.replace(/\s+/g, '_')}_eslesme_${ts}.csv`;
+    a.download = `${sel.name.replace(/\s+/g, '_')}_eslesme_${ts}.xls`;
     a.click();
     URL.revokeObjectURL(url);
   };
