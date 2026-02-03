@@ -303,7 +303,9 @@ export default function AdminPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${sel.name.replace(/\s+/g, '_')}_eslesme_raporu.csv`;
+    const now = new Date();
+    const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+    a.download = `${sel.name.replace(/\s+/g, '_')}_eslesme_${ts}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
