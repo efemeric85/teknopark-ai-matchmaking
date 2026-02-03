@@ -79,6 +79,24 @@ export async function GET(
       .in('event_id', activeEventIds)
       .order('round_number', { ascending: false });
 
+    // ═══ BUG 14 FIX: Auto-complete expired active matches ═══
+    const eventDurationMap = new Map(events.map(e => [e.id, e.round_duration_sec || e.duration || DEFAULT_DURATION]));
+    const now = Date.now();
+    const expiredIds: string[] = [];
+    for (const m of (allMatches || [])) {
+      if (m.status === 'active' && m.started_at) {
+        const dur = eventDurationMap.get(m.event_id) || DEFAULT_DURATION;
+        if ((now - new Date(m.started_at).getTime()) / 1000 >= dur) {
+          expiredIds.push(m.id);
+          m.status = 'completed'; // Update local copy for correct scoring below
+        }
+      }
+    }
+    if (expiredIds.length > 0) {
+      await supabase.from('matches').update({ status: 'completed' }).in('id', expiredIds);
+    }
+    // ═══ END BUG 14 FIX ═══
+
     let bestMatch: any = null;
     let bestUser: any = null;
     let bestEvent: any = null;
