@@ -257,7 +257,7 @@ export default function AdminPage() {
 
   const handleExportPdf = async () => {
     if (!sel || matches.length === 0 || users.length === 0) return;
-    if (!pastRoundsRef.current || !matrixRef.current) return;
+    if (!matrixRef.current) return;
 
     // Load html2canvas + jsPDF from CDN
     const loadScript = (src: string) => new Promise<void>((res, rej) => {
@@ -272,7 +272,7 @@ export default function AdminPage() {
     const h2c = (window as any).html2canvas;
     const { jsPDF } = (window as any).jspdf;
 
-    // Build a temporary header element (browser renders Turkish perfectly)
+    // TÜM turları al (son tur dahil)
     const rounds = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b);
     const headerDiv = document.createElement('div');
     headerDiv.style.cssText = 'position:absolute;left:-9999px;top:0;background:#fff;padding:20px;font-family:-apple-system,Arial,sans-serif;width:800px;';
@@ -281,9 +281,29 @@ export default function AdminPage() {
       <p style="margin:2px 0;font-size:13px;color:#334155;"><b>Tarih:</b> ${fmtDate(sel.date)}</p>
       <p style="margin:2px 0;font-size:13px;color:#334155;"><b>Katılımcı:</b> ${users.length} kişi</p>
       <p style="margin:2px 0;font-size:13px;color:#334155;"><b>Toplam Tur:</b> ${rounds.length}</p>
-      <h3 style="margin:16px 0 0 0;font-size:16px;color:#334155;">Geçmiş Turlar</h3>
+      <h3 style="margin:16px 0 0 0;font-size:16px;color:#334155;">Tüm Turlar</h3>
     `;
     document.body.appendChild(headerDiv);
+
+    // Geçici div: TÜM turları içerir (son tur dahil)
+    const allRoundsDiv = document.createElement('div');
+    allRoundsDiv.style.cssText = 'position:absolute;left:-9999px;top:0;background:#fff;padding:0 20px 20px;font-family:-apple-system,Arial,sans-serif;width:800px;';
+    allRoundsDiv.innerHTML = rounds.map(r => {
+      const rm = matches.filter(m => m.round_number === r);
+      const badges = rm.map(m => {
+        const u1 = users.find(u => u.id === m.user1_id);
+        const u2 = users.find(u => u.id === m.user2_id);
+        const score = m.compatibility_score ? ` (%${Math.round(m.compatibility_score * 100)})` : '';
+        return `<span style="font-size:11px;padding:2px 8px;border-radius:6px;background:#e0f2fe;color:#0369a1;display:inline-block;">${u1?.full_name || '?'} ↔ ${u2?.full_name || '?'}${score}</span>`;
+      }).join(' ');
+      return `
+        <div style="padding:8px 12px;border-radius:8px;background:#f8fafc;margin-bottom:6px;border:1px solid #e2e8f0;">
+          <span style="font-weight:600;font-size:13px;color:#334155;">Tur ${r}</span>
+          <span style="color:#64748b;font-size:12px;margin-left:12px;">${rm.length} eşleşme</span>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${badges}</div>
+        </div>`;
+    }).join('');
+    document.body.appendChild(allRoundsDiv);
 
     const matrixTitleDiv = document.createElement('div');
     matrixTitleDiv.style.cssText = 'position:absolute;left:-9999px;top:0;background:#fff;padding:10px 20px;font-family:-apple-system,Arial,sans-serif;width:800px;';
@@ -291,15 +311,16 @@ export default function AdminPage() {
     document.body.appendChild(matrixTitleDiv);
 
     // Capture all sections as screenshots
-    const [headerCanvas, pastCanvas, matTitleCanvas, matrixCanvas] = await Promise.all([
+    const [headerCanvas, allRoundsCanvas, matTitleCanvas, matrixCanvas] = await Promise.all([
       h2c(headerDiv, { backgroundColor: '#ffffff', scale: 2 }),
-      h2c(pastRoundsRef.current, { backgroundColor: '#ffffff', scale: 2 }),
+      h2c(allRoundsDiv, { backgroundColor: '#ffffff', scale: 2 }),
       h2c(matrixTitleDiv, { backgroundColor: '#ffffff', scale: 2 }),
       h2c(matrixRef.current, { backgroundColor: '#ffffff', scale: 2 }),
     ]);
 
     // Cleanup temp elements
     document.body.removeChild(headerDiv);
+    document.body.removeChild(allRoundsDiv);
     document.body.removeChild(matrixTitleDiv);
 
     const pdf = new jsPDF('p', 'mm', 'a4');
@@ -322,7 +343,7 @@ export default function AdminPage() {
     };
 
     addCanvasImage(headerCanvas);
-    addCanvasImage(pastCanvas);
+    addCanvasImage(allRoundsCanvas);
     y += 4;
     addCanvasImage(matTitleCanvas);
     addCanvasImage(matrixCanvas);
