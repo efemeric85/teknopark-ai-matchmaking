@@ -84,18 +84,17 @@ export async function GET(
       });
     }
 
-    // 3. Tüm match'leri çek ve skor ile en iyi match'i seç
+    // 3. Tüm match'leri çek - TÜM user ID'leri kullan (duplicate email durumu için)
+    const allUserIds = allUsers.map(u => u.id);
     const activeEventIds = events.map(e => e.id);
-    const activeUserIds = allUsers.filter(u => activeEventIds.includes(u.event_id)).map(u => u.id);
 
     const { data: allMatches } = await supabase
       .from('matches').select('*')
-      .or(activeUserIds.map(id => `user1_id.eq.${id},user2_id.eq.${id}`).join(','))
-      .in('event_id', activeEventIds)
+      .or(allUserIds.map(id => `user1_id.eq.${id},user2_id.eq.${id}`).join(','))
       .order('round_number', { ascending: false });
 
     // ═══ BUG 14 FIX: Auto-complete expired active matches ═══
-    const eventDurationMap = new Map(events.map(e => [e.id, e.round_duration_sec || e.duration || DEFAULT_DURATION]));
+    const eventDurationMap = new Map((allEventsRaw || []).map((e: any) => [e.id, e.round_duration_sec || e.duration || DEFAULT_DURATION]));
     const now = Date.now();
     const expiredIds: string[] = [];
     for (const m of (allMatches || [])) {
@@ -119,7 +118,7 @@ export async function GET(
 
     for (const m of (allMatches || [])) {
       const matchUser = allUsers.find(u => u.id === m.user1_id || u.id === m.user2_id);
-      const matchEvent = events.find(e => e.id === m.event_id);
+      const matchEvent = (allEventsRaw || []).find((e: any) => e.id === m.event_id);
       if (!matchUser || !matchEvent) continue;
 
       const duration = matchEvent.round_duration_sec || matchEvent.duration || DEFAULT_DURATION;
