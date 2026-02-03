@@ -98,9 +98,13 @@ export default function HomePage() {
   return (
     <div style={pageStyle}>
       <div style={{ maxWidth: '520px', width: '100%' }}>
-        {/* Header with white logo */}
+        {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <img src="/logo-white.png" alt="Teknopark Ankara" style={{ width: '300px', height: 'auto', marginBottom: '16px' }} />
+          <img
+            src="/teknopark-ankara.png"
+            alt="Teknopark Ankara"
+            style={{ height: '80px', width: 'auto', display: 'block', margin: '0 auto 12px auto' }}
+          />
           <p style={{ color: '#06b6d4', fontSize: '12px', letterSpacing: '3px', margin: '0 0 4px' }}>TEKNOPARK ANKARA</p>
           <h1 style={{ color: '#fff', fontSize: '28px', fontWeight: 700, margin: '0 0 8px' }}>🤝 Speed Networking</h1>
           <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Yapay zeka destekli networking etkinliği</p>
