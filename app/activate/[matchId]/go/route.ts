@@ -20,12 +20,10 @@ export async function GET(
   }
 
   try {
-    // Match'i kontrol et
     const { data: match } = await supabase
       .from('matches').select('*').eq('id', matchId).single();
 
     if (!match) {
-      // Match bulunamadı, meeting sayfasına yönlendir
       const url = new URL(`/meeting/${encodeURIComponent(email)}`, request.nextUrl.origin);
       return NextResponse.redirect(url);
     }
@@ -38,18 +36,15 @@ export async function GET(
         .eq('id', matchId)
         .eq('status', 'pending');
 
-      console.log('[ACTIVATE-GO] Match activated:', matchId, 'by:', email);
+      console.log('[GO-ROUTE] Match activated:', matchId, 'by:', email);
     } else {
-      console.log('[ACTIVATE-GO] Match already', match.status, ':', matchId);
+      console.log('[GO-ROUTE] Match already', match.status, ':', matchId);
     }
 
-    // Meeting sayfasına yönlendir
     const url = new URL(`/meeting/${encodeURIComponent(email)}`, request.nextUrl.origin);
     return NextResponse.redirect(url);
-
   } catch (error: any) {
-    console.error('[ACTIVATE-GO] Error:', error);
-    // Hata olsa bile meeting sayfasına yönlendir
+    console.error('[GO-ROUTE] Error:', error);
     const url = new URL(`/meeting/${encodeURIComponent(email)}`, request.nextUrl.origin);
     return NextResponse.redirect(url);
   }
