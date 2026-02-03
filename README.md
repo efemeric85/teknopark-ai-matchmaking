@@ -170,8 +170,8 @@ The core matching logic (`app/api/match/route.ts`) works in several stages:
 
 ## Author
 
-**Efe Bey** | [RichMe AI](https://richmeai.com)
-
+**Efe Meric** | [RichMe AI](https://richmeai.com)
+04.02.2026
 AI Automation & Process Optimization Consultant
 
 ---
