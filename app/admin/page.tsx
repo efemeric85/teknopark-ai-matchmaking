@@ -228,11 +228,10 @@ export default function AdminPage() {
     if (!sel || !confirm('Tüm eşleşmeleri sıfırlamak istediğinize emin misiniz?')) return;
     setLoading('reset');
     try {
-      const res = await fetch(`/api/events/${sel.id}/match`, { method: 'DELETE', headers: apiHeaders() });
-      const data = await res.json();
-      if (data.success) flash('Tüm eşleşmeler sıfırlandı.', 'ok');
-      else flash(data.error || 'Sıfırlama hatası.', 'err');
-      loadMatches(sel.id);
+      const { error } = await supabase.from('matches').delete().eq('event_id', sel.id);
+      if (error) throw error;
+      setMatches([]);
+      flash('Tüm eşleşmeler sıfırlandı.', 'ok');
     } catch (e: any) { flash(e.message, 'err'); }
     setLoading(null);
   };
