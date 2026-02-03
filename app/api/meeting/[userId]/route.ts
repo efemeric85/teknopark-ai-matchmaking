@@ -9,25 +9,20 @@ const supabase = createClient(
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// ─── Round bilgisi hesapla ───
+const DEFAULT_DURATION = 360;
+
 async function calcRoundInfo(eventId: string) {
-  const { data: users } = await supabase
-    .from('users').select('id').eq('event_id', eventId);
+  const { data: users } = await supabase.from('users').select('id').eq('event_id', eventId);
   const n = users?.length || 0;
-  const maxRounds = n <= 1 ? 0 : (n % 2 === 0 ? n - 1 : n);
+  const maxRounds = n < 2 ? 0 : (n % 2 === 0 ? n - 1 : n);
 
   const { data: matches } = await supabase
-    .from('matches').select('round_number')
-    .eq('event_id', eventId)
+    .from('matches').select('round_number').eq('event_id', eventId)
     .order('round_number', { ascending: false }).limit(1);
-  const currentRound = matches?.[0]?.round_number || 0;
 
-  return {
-    current: currentRound,
-    max: maxRounds,
-    participantCount: n,
-    allCompleted: maxRounds > 0 && currentRound >= maxRounds
-  };
+  const current = matches && matches.length > 0 ? matches[0].round_number : 0;
+
+  return { current, max: maxRounds, participantCount: n, allCompleted: current >= maxRounds && maxRounds > 0 };
 }
 
 export async function GET(
@@ -36,125 +31,93 @@ export async function GET(
 ) {
   try {
     const userId = decodeURIComponent(params.userId);
-    console.log('[MEETING-V7] Request for:', userId);
+    console.log('[MEETING-V8] Request for:', userId);
 
-    // ─── 1. Kullanıcıyı bul (email veya id) ───
+    // 1. Kullanıcıyı bul (email veya id)
     let allUsers: any[] = [];
     if (userId.includes('@')) {
-      const { data } = await supabase
-        .from('users').select('*').ilike('email', userId);
+      const { data } = await supabase.from('users').select('*').ilike('email', userId);
       allUsers = data || [];
     } else {
-      const { data } = await supabase
-        .from('users').select('*').eq('id', userId);
+      const { data } = await supabase.from('users').select('*').eq('id', userId);
       allUsers = data || [];
     }
 
-    console.log('[MEETING-V7] Found', allUsers.length, 'user records');
-
     if (allUsers.length === 0) {
       return NextResponse.json({
-        v: 'V7', error: 'Kullanıcı bulunamadı',
+        v: 'V8', error: 'Kullanıcı bulunamadı',
         user: null, match: null, partner: null, event: null, waiting: null, roundInfo: null
       }, { status: 404 });
     }
 
-    // ─── 2. Aktif event'leri bul ───
+    // 2. Aktif event'leri bul
     const eventIds = [...new Set(allUsers.map(u => u.event_id))];
     const { data: events } = await supabase
       .from('events').select('*').in('id', eventIds).eq('status', 'active');
 
-    console.log('[MEETING-V7] Active events:', events?.length || 0);
-
     if (!events || events.length === 0) {
-      const { data: anyEvents } = await supabase
-        .from('events').select('*').in('id', eventIds)
-        .order('created_at', { ascending: false }).limit(1);
-
-      if (!anyEvents || anyEvents.length === 0) {
-        return NextResponse.json({
-          v: 'V7', error: 'Aktif etkinlik bulunamadı',
-          user: null, match: null, partner: null, event: null, waiting: null, roundInfo: null
-        });
-      }
-
-      const event = anyEvents[0];
-      const user = allUsers.find(u => u.event_id === event.id) || allUsers[0];
-      const roundInfo = await calcRoundInfo(event.id);
-
+      // Event aktif değilse bile kullanıcı bilgisini dön
+      const user = allUsers[0];
+      const { data: anyEvent } = await supabase.from('events').select('*').eq('id', user.event_id).single();
+      const roundInfo = await calcRoundInfo(user.event_id);
       return NextResponse.json({
-        v: 'V7',
+        v: 'V8',
         user: { id: user.id, full_name: user.full_name, company: user.company, email: user.email },
         match: null, partner: null,
-        event: { id: event.id, name: event.name, duration: event.round_duration_sec || event.duration || 360, status: event.status },
+        event: anyEvent ? { id: anyEvent.id, name: anyEvent.name, duration: anyEvent.round_duration_sec || anyEvent.duration || DEFAULT_DURATION, status: anyEvent.status } : null,
         waiting: null, roundInfo
       });
     }
 
-    // ─── 3. Her aktif event için match'leri tara ───
-    // ÖNCELİK: Kullanıcının EN SON turda eşleşmesi var mı?
-    // Yoksa waiting state döndür (eski turdan completed match gösterme!)
+    // 3. Tüm match'leri çek ve skor ile en iyi match'i seç
+    const activeEventIds = events.map(e => e.id);
+    const activeUserIds = allUsers.filter(u => activeEventIds.includes(u.event_id)).map(u => u.id);
+
+    const { data: allMatches } = await supabase
+      .from('matches').select('*')
+      .or(activeUserIds.map(id => `user1_id.eq.${id},user2_id.eq.${id}`).join(','))
+      .in('event_id', activeEventIds)
+      .order('round_number', { ascending: false });
+
     let bestMatch: any = null;
     let bestUser: any = null;
     let bestEvent: any = null;
-    let bestScore = -1;
+    let bestScore = -999;
 
-    for (const event of events) {
-      const user = allUsers.find(u => u.event_id === event.id);
-      if (!user) continue;
+    for (const m of (allMatches || [])) {
+      const matchUser = allUsers.find(u => u.id === m.user1_id || u.id === m.user2_id);
+      const matchEvent = events.find(e => e.id === m.event_id);
+      if (!matchUser || !matchEvent) continue;
 
-      // Önce event'in EN SON turunu bul (tüm match'lerden)
-      const { data: allEventMatches } = await supabase
-        .from('matches').select('round_number, status, started_at, user1_id, user2_id')
-        .eq('event_id', event.id)
-        .order('round_number', { ascending: false }).limit(1);
+      const duration = matchEvent.round_duration_sec || matchEvent.duration || DEFAULT_DURATION;
+      let score = 0;
 
-      if (!allEventMatches || allEventMatches.length === 0) continue;
-
-      const eventLatestRound = allEventMatches[0].round_number;
-
-      // Kullanıcının BU SON turda match'i var mı?
-      const { data: userLatestMatches } = await supabase
-        .from('matches').select('*')
-        .eq('event_id', event.id)
-        .eq('round_number', eventLatestRound)
-        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
-
-      if (!userLatestMatches || userLatestMatches.length === 0) {
-        // Kullanıcı en son turda EŞLEŞMEMİŞ → waiting state (Section 4'e bırak)
-        console.log('[MEETING-V7] User', user.id, 'unmatched in round', eventLatestRound, 'of event', event.id);
-        continue;
+      if (m.status === 'pending') {
+        score = 100 + m.round_number; // Pending = en yüksek öncelik
+      } else if (m.status === 'active') {
+        if (m.started_at) {
+          const elapsed = (Date.now() - new Date(m.started_at).getTime()) / 1000;
+          if (elapsed < duration) {
+            score = 50 + m.round_number; // Aktif ve süresi devam ediyor
+          } else {
+            score = -10 + m.round_number; // Süresi dolmuş
+          }
+        } else {
+          score = 80 + m.round_number; // Aktif ama started_at yok (garip durum)
+        }
+      } else if (m.status === 'completed') {
+        score = -50 + m.round_number; // Tamamlanmış
       }
 
-      // En son turdaki match'leri puanla
-      for (const match of userLatestMatches) {
-        const now = Date.now();
-        let score = 0;
-
-        if (match.status === 'pending') {
-          score = 1000 + eventLatestRound;
-        } else if (match.status === 'active' && match.started_at) {
-          const elapsed = (now - new Date(match.started_at).getTime()) / 1000;
-          const duration = event.round_duration_sec || event.duration || 360;
-          if (elapsed < duration) {
-            score = 500 + eventLatestRound;
-          } else {
-            score = 100 + eventLatestRound;
-          }
-        } else if (match.status === 'completed') {
-          score = 50 + eventLatestRound;
-        }
-
-        if (score > bestScore) {
-          bestScore = score;
-          bestMatch = match;
-          bestUser = user;
-          bestEvent = event;
-        }
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = m;
+        bestUser = matchUser;
+        bestEvent = matchEvent;
       }
     }
 
-    // ─── 4. Eşleşme bulunamadı veya kullanıcı son turda eşleşmemiş ───
+    // 4. Eşleşme bulunamadı - waiting state kontrolü
     if (!bestMatch || !bestUser || !bestEvent) {
       const event = events[0];
       const user = allUsers.find(u => u.event_id === event.id) || allUsers[0];
@@ -178,10 +141,10 @@ export async function GET(
         const allStarted = pendingMatches.length === 0 && activeMatches.length > 0;
 
         return NextResponse.json({
-          v: 'V7',
+          v: 'V8',
           user: { id: user.id, full_name: user.full_name, company: user.company, email: user.email },
           match: null, partner: null,
-          event: { id: event.id, name: event.name, duration: event.round_duration_sec || event.duration || 360, status: event.status },
+          event: { id: event.id, name: event.name, duration: event.round_duration_sec || event.duration || DEFAULT_DURATION, status: event.status },
           waiting: {
             isWaiting: true, roundNumber: maxRound,
             activeCount: activeMatches.length, pendingCount: pendingMatches.length,
@@ -192,44 +155,41 @@ export async function GET(
       }
 
       return NextResponse.json({
-        v: 'V7',
+        v: 'V8',
         user: { id: user.id, full_name: user.full_name, company: user.company, email: user.email },
         match: null, partner: null,
-        event: { id: event.id, name: event.name, duration: event.round_duration_sec || event.duration || 360, status: event.status },
+        event: { id: event.id, name: event.name, duration: event.round_duration_sec || event.duration || DEFAULT_DURATION, status: event.status },
         waiting: null, roundInfo
       });
     }
 
-    // ─── 5. Partner bilgisi ───
+    // 5. Partner bilgisi
     const partnerId = bestMatch.user1_id === bestUser.id ? bestMatch.user2_id : bestMatch.user1_id;
-    const { data: partner } = await supabase
-      .from('users').select('*').eq('id', partnerId).single();
+    const { data: partner } = await supabase.from('users').select('*').eq('id', partnerId).single();
 
     const roundInfo = await calcRoundInfo(bestEvent.id);
+    const duration = bestEvent.round_duration_sec || bestEvent.duration || DEFAULT_DURATION;
 
-    console.log('[MEETING-V7] RESULT: Match:', bestMatch.id, 'status:', bestMatch.status,
+    console.log('[MEETING-V8] RESULT: Match:', bestMatch.id, 'status:', bestMatch.status,
       'round:', bestMatch.round_number, '/', roundInfo.max, 'partner:', partner?.full_name);
 
     return NextResponse.json({
-      v: 'V7',
+      v: 'V8',
       user: { id: bestUser.id, full_name: bestUser.full_name, company: bestUser.company, email: bestUser.email },
       match: {
         id: bestMatch.id,
         status: bestMatch.status,
         started_at: bestMatch.started_at,
-        round_number: bestMatch.round_number
+        round_number: bestMatch.round_number,
+        icebreaker_question: bestMatch.icebreaker_question || null,
       },
-      partner: partner ? {
-        id: partner.id, full_name: partner.full_name,
-        company: partner.company, title: partner.title, goal: partner.goal
-      } : null,
-      event: { id: bestEvent.id, name: bestEvent.name, duration: bestEvent.round_duration_sec || bestEvent.duration || 360, status: bestEvent.status },
+      partner: partner ? { id: partner.id, full_name: partner.full_name, company: partner.company, email: partner.email } : null,
+      event: { id: bestEvent.id, name: bestEvent.name, duration, status: bestEvent.status },
       waiting: null,
       roundInfo
     });
-
   } catch (error: any) {
-    console.error('[MEETING-V7] Error:', error);
-    return NextResponse.json({ v: 'V7', error: error.message || 'Hata oluştu.', roundInfo: null }, { status: 500 });
+    console.error('[MEETING-V8] Error:', error);
+    return NextResponse.json({ v: 'V8', error: error.message || 'Hata oluştu.' }, { status: 500 });
   }
 }
