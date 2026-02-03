@@ -119,7 +119,7 @@ export default function HomePage() {
           🤝 Speed Networking
         </h1>
         <p style={{ color: '#94a3b8', fontSize: '15px', margin: 0, lineHeight: '1.5' }}>
-          Yapay Zeka destekli networking eşleştirme uygulaması
+          Yapay Zeka Destekli Networking Eşleştirme Uygulaması
         </p>
       </div>
 
