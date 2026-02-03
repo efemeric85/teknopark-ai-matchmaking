@@ -60,12 +60,15 @@ export async function GET(
       duration: e.round_duration_sec || e.duration || DEFAULT_DURATION,
     }));
 
-    // Filter to active events (or specific event if requested)
+    // Filter events: if specific event requested use it, otherwise use ALL events
+    // Event status (active/draft) only controls registration, not match visibility
     let events: any[];
     if (filterEventId) {
       events = (allEventsRaw || []).filter(e => e.id === filterEventId);
     } else {
-      events = (allEventsRaw || []).filter(e => e.status === 'active');
+      // Prefer active events, but fall back to all events if no active ones
+      const activeEvents = (allEventsRaw || []).filter(e => e.status === 'active');
+      events = activeEvents.length > 0 ? activeEvents : (allEventsRaw || []);
     }
 
     if (!events || events.length === 0) {
