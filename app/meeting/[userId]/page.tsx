@@ -76,7 +76,7 @@ export default function MeetingPage() {
   const tCol = (s: number) => s <= 30 ? '#ef4444' : s <= 60 ? '#f59e0b' : '#10b981';
 
   const homeBtn = (
-    <a href="/" style={{ color: '#64748b', fontSize: '12px', textDecoration: 'none', display: 'inline-block', marginBottom: '12px' }}>🏠 Anasayfa</a>
+    <a href="/" style={{ color: '#94a3b8', fontSize: '14px', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '16px', padding: '8px 16px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', transition: 'all 0.2s' }}>🏠 Anasayfa</a>
   );
 
   const userCard = user ? (
@@ -106,8 +106,17 @@ export default function MeetingPage() {
   const header = (
     <div style={{ marginBottom: '20px' }}>
       {homeBtn}
-      <p style={{ color: '#64748b', fontSize: '11px', letterSpacing: '3px', margin: '0 0 4px', textTransform: 'uppercase' }}>TEKNOPARK ANKARA</p>
-      {event && <p style={{ color: '#06b6d4', fontSize: '18px', fontWeight: 700, margin: '0 0 8px' }}>{event.name}</p>}
+      {/* ═══ LOGO ═══ */}
+      <div style={{ marginBottom: '12px' }}>
+        <img
+          src="/logo-white.png"
+          alt="Teknopark Ankara"
+          style={{ width: '200px', height: 'auto', display: 'block', margin: '0 auto' }}
+        />
+      </div>
+      <p style={{ color: '#94a3b8', fontSize: '14px', letterSpacing: '4px', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>TEKNOPARK ANKARA</p>
+      <p style={{ color: '#e2e8f0', fontSize: '20px', fontWeight: 700, margin: '0 0 4px' }}>🤝 Speed Networking</p>
+      {event && <p style={{ color: '#06b6d4', fontSize: '18px', fontWeight: 700, margin: '0 0 12px' }}>{event.name}</p>}
       {evSelector}
       {userCard}
       {roundInfo && roundInfo.max > 0 && (
