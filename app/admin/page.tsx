@@ -294,7 +294,8 @@ export default function AdminPage() {
         const u1 = users.find(u => u.id === m.user1_id);
         const u2 = users.find(u => u.id === m.user2_id);
         const score = m.compatibility_score ? ` (%${Math.round(m.compatibility_score * 100)})` : '';
-        return `<span style="font-size:11px;padding:2px 8px;border-radius:6px;background:#e0f2fe;color:#0369a1;display:inline-block;">${u1?.full_name || '?'} ↔ ${u2?.full_name || '?'}${score}</span>`;
+        const tableTag = m.table_number ? `<span style="color:#dc2626;font-weight:800;">M${m.table_number} </span>` : '';
+        return `<span style="font-size:11px;padding:2px 8px;border-radius:6px;background:#e0f2fe;color:#0369a1;display:inline-block;">${tableTag}${u1?.full_name || '?'} ↔ ${u2?.full_name || '?'}${score}</span>`;
       }).join(' ');
       return `
         <div style="padding:8px 12px;border-radius:8px;background:#f8fafc;margin-bottom:6px;border:1px solid #e2e8f0;">
@@ -661,6 +662,11 @@ export default function AdminPage() {
                         }}>
                           <div style={{ flex: 1 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              {m.table_number && (
+                                <span style={{ color: '#dc2626', fontSize: '15px', fontWeight: 900, background: '#fef2f2', border: '2px solid #fca5a5', borderRadius: '8px', padding: '2px 10px', marginRight: '4px', textTransform: 'uppercase' as const }}>
+                                  MASA {m.table_number}
+                                </span>
+                              )}
                               <span style={{ fontWeight: 600, fontSize: '13px' }}>{u1?.full_name || '?'}</span>
                               <span style={{ color: '#94a3b8', fontSize: '11px' }}>({u1?.company || ''})</span>
                               <span style={{ color: '#06b6d4' }}>↔</span>
@@ -715,6 +721,7 @@ export default function AdminPage() {
                             const u2 = getUserById(m.user2_id);
                             return (
                               <span key={m.id} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: '#e0f2fe', color: '#0369a1' }}>
+                                <span style={{ color: '#dc2626', fontWeight: 800 }}>{m.table_number ? `M${m.table_number} ` : ''}</span>
                                 {u1?.full_name || '?'} ↔ {u2?.full_name || '?'}
                                 {m.compatibility_score ? ` (%${Math.round(m.compatibility_score * 100)})` : ''}
                               </span>
