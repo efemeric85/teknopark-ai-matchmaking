@@ -362,11 +362,13 @@ export default function AdminPage() {
   };
 
   const isExpired = (m: Match): boolean => m.status === 'active' && calcRemaining(m) <= 0;
+  const checkedInUsers = users.filter(u => u.checked_in);
+  const absentUsers = users.filter(u => !u.checked_in);
   const currentRound = matches.length > 0 ? Math.max(...matches.map(m => m.round_number)) : 0;
   const currentRoundMatches = matches.filter(m => m.round_number === currentRound);
   const allCurrentDone = currentRound > 0 && currentRoundMatches.every(m => m.status === 'completed' || isExpired(m));
   const hasRunning = currentRoundMatches.some(m => (m.status === 'pending' || m.status === 'active') && !isExpired(m));
-  const maxPossibleRounds = users.length < 2 ? 0 : (users.length % 2 === 0 ? users.length - 1 : users.length);
+  const maxPossibleRounds = checkedInUsers.length < 2 ? 0 : (checkedInUsers.length % 2 === 0 ? checkedInUsers.length - 1 : checkedInUsers.length);
   const effectiveMaxRounds = Math.min(getMaxRounds(), maxPossibleRounds);
   const maxRoundsReached = currentRound >= effectiveMaxRounds;
 
@@ -374,10 +376,10 @@ export default function AdminPage() {
   const activeCount = currentRoundMatches.filter(m => m.status === 'active' && !isExpired(m)).length;
   const completedCount = currentRoundMatches.filter(m => m.status === 'completed' || isExpired(m)).length;
 
-  // Find unmatched/waiting user (odd number participant)
+  // Find unmatched/waiting user (only among checked-in users)
   const matchedUserIds = new Set<string>();
   currentRoundMatches.forEach(m => { matchedUserIds.add(m.user1_id); matchedUserIds.add(m.user2_id); });
-  const waitingUser = currentRound > 0 ? users.find(u => !matchedUserIds.has(u.id)) : null;
+  const waitingUser = currentRound > 0 ? checkedInUsers.find(u => !matchedUserIds.has(u.id)) : null;
 
   const pastRounds = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b);
 
@@ -620,6 +622,18 @@ export default function AdminPage() {
                   ))}
                 </div>
               )}
+              {absentUsers.length > 0 && (
+                <div style={{ marginTop: '12px', padding: '10px 14px', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fecaca' }}>
+                  <p style={{ fontSize: '12px', fontWeight: 700, color: '#991b1b', margin: '0 0 6px' }}>Etkinliğe Katılmayanlar ({absentUsers.length})</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    {absentUsers.map(u => (
+                      <span key={u.id} style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: '#fff', border: '1px solid #fecaca', color: '#991b1b' }}>
+                        {u.full_name} ({u.company})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Match Controls */}
@@ -643,9 +657,9 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {getMaxRounds() > maxPossibleRounds && users.length > 0 && (
+              {getMaxRounds() > maxPossibleRounds && checkedInUsers.length > 0 && (
                 <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '8px', padding: '8px 12px', marginBottom: '12px' }}>
-                  <p style={{ color: '#92400e', fontSize: '12px', margin: 0 }}>⚠️ {users.length} katılımcı ile en fazla {maxPossibleRounds} tur yapılabilir.</p>
+                  <p style={{ color: '#92400e', fontSize: '12px', margin: 0 }}>⚠️ {checkedInUsers.length} katılımcı (burada) ile en fazla {maxPossibleRounds} tur yapılabilir.</p>
                 </div>
               )}
 
