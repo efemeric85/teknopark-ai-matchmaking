@@ -248,6 +248,7 @@ export async function GET(
         status: bestMatch.status,
         started_at: bestMatch.started_at,
         round_number: bestMatch.round_number,
+        table_number: bestMatch.table_number || null,
         icebreaker_question: bestMatch.icebreaker_question || null,
       },
       partner: partner ? { id: partner.id, full_name: partner.full_name, company: partner.company, email: partner.email } : null,
