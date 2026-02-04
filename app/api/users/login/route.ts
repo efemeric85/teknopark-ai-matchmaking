@@ -6,6 +6,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Güvenli alanlar - embedding ve hassas veriler HARİÇ
+const SAFE_USER_FIELDS = 'id, email, full_name, company, position, current_intent, event_id, checked_in, created_at';
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -18,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('users')
-      .select('*')
+      .select(SAFE_USER_FIELDS)  // select('*') DEĞİL
       .eq('email', email);
 
     if (eventId) {
