@@ -9,7 +9,7 @@ const supabase = createClient(
 );
 
 interface Event { id: string; name: string; date: string; duration: number; round_duration_sec?: number; max_rounds?: number; status: string; created_at?: string; }
-interface User { id: string; full_name: string; company: string; position: string; email: string; event_id: string; current_intent?: string; }
+interface User { id: string; full_name: string; company: string; position: string; email: string; event_id: string; current_intent?: string; checked_in?: boolean; }
 interface Match { id: string; event_id: string; user1_id: string; user2_id: string; round_number: number; status: string; started_at: string | null; table_number?: number; compatibility_score?: number; }
 
 function fmtDate(d: string | null) { return d ? new Date(d).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''; }
@@ -553,21 +553,69 @@ export default function AdminPage() {
           <>
             {/* Participants */}
             <div style={{ ...C, marginTop: '16px' }}>
-              <h3 style={T}>Katılımcılar ({users.length})</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h3 style={{ ...T, margin: 0 }}>Katılımcılar ({users.length})</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#10b981' }}>
+                    ✅ {users.filter(u => u.checked_in).length} burada
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>/ {users.length} kayıtlı</span>
+                  {users.length > 0 && (
+                    <>
+                      <button onClick={async () => {
+                        const ids = users.map(u => u.id);
+                        await supabase.from('users').update({ checked_in: true }).in('id', ids);
+                        if (sel) loadUsers(sel.id);
+                        flash('Tümü burada olarak işaretlendi.', 'ok');
+                      }} style={{ ...btnSmall, background: '#dcfce7', color: '#166534' }}>Hepsini İşaretle</button>
+                      <button onClick={async () => {
+                        const ids = users.map(u => u.id);
+                        await supabase.from('users').update({ checked_in: false }).in('id', ids);
+                        if (sel) loadUsers(sel.id);
+                        flash('Tüm işaretler kaldırıldı.', 'ok');
+                      }} style={{ ...btnSmall, background: '#fee2e2', color: '#991b1b' }}>Hepsini Kaldır</button>
+                    </>
+                  )}
+                </div>
+              </div>
               {users.length === 0 ? (
                 <p style={{ color: '#94a3b8', fontSize: '13px' }}>Henüz katılımcı yok.</p>
               ) : (
                 <div style={{ display: 'grid', gap: '4px' }}>
                   {users.map((p, i) => (
-                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: '8px', background: i % 2 === 0 ? '#f8fafc' : '#fff' }}>
-                      <div>
-                        <span style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>{p.full_name}</span>
-                        <span style={{ color: '#64748b', fontSize: '12px', marginLeft: '8px' }}>{p.company}</span>
-                        <span style={{ color: '#94a3b8', fontSize: '11px', marginLeft: '8px' }}>{p.email}</span>
+                    <div key={p.id} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '8px 12px', borderRadius: '8px',
+                      background: p.checked_in ? '#f0fdf4' : i % 2 === 0 ? '#f8fafc' : '#fff',
+                      border: p.checked_in ? '1px solid #86efac' : '1px solid transparent',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!p.checked_in}
+                            onChange={async () => {
+                              const newVal = !p.checked_in;
+                              await supabase.from('users').update({ checked_in: newVal }).eq('id', p.id);
+                              setUsers(prev => prev.map(u => u.id === p.id ? { ...u, checked_in: newVal } : u));
+                            }}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#10b981' }}
+                          />
+                        </label>
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: '13px', color: p.checked_in ? '#0f172a' : '#94a3b8', textDecoration: p.checked_in ? 'none' : 'none' }}>{p.full_name}</span>
+                          <span style={{ color: '#64748b', fontSize: '12px', marginLeft: '8px' }}>{p.company}</span>
+                          <span style={{ color: '#94a3b8', fontSize: '11px', marginLeft: '8px' }}>{p.email}</span>
+                        </div>
                       </div>
-                      <span style={{ color: '#94a3b8', fontSize: '11px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {p.current_intent || ''}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '11px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {p.current_intent || ''}
+                        </span>
+                        <span style={{ fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '6px', background: p.checked_in ? '#dcfce7' : '#f1f5f9', color: p.checked_in ? '#166534' : '#94a3b8' }}>
+                          {p.checked_in ? 'BURADA' : 'Gelmedi'}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -602,10 +650,15 @@ export default function AdminPage() {
               )}
 
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {users.filter(u => u.checked_in).length < 2 && (
+                  <div style={{ width: '100%', background: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '8px', padding: '8px 12px', marginBottom: '8px' }}>
+                    <p style={{ color: '#92400e', fontSize: '12px', margin: 0 }}>⚠️ Eşleştirme için en az 2 katılımcı "burada" olarak işaretlenmelidir. Şu an: {users.filter(u => u.checked_in).length}</p>
+                  </div>
+                )}
                 <button
                   onClick={doMatch}
-                  disabled={loading === 'match' || (hasRunning && currentRound > 0) || (maxRoundsReached && !allCurrentDone)}
-                  style={{ ...btnCyan, opacity: loading === 'match' || (hasRunning && currentRound > 0) ? 0.5 : 1 }}
+                  disabled={loading === 'match' || (hasRunning && currentRound > 0) || (maxRoundsReached && !allCurrentDone) || users.filter(u => u.checked_in).length < 2}
+                  style={{ ...btnCyan, opacity: loading === 'match' || (hasRunning && currentRound > 0) || users.filter(u => u.checked_in).length < 2 ? 0.5 : 1 }}
                 >
                   {loading === 'match' ? 'Eşleştiriliyor...' :
                     currentRound === 0 ? 'AI Eşleştir' :
