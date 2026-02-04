@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 
 interface UserData { id: string; full_name: string; company: string; email: string; position?: string; }
-interface MatchData { id: string; status: string; started_at: string | null; round_number: number; icebreaker_question?: string | null; }
+interface MatchData { id: string; status: string; started_at: string | null; round_number: number; table_number?: number | null; icebreaker_question?: string | null; }
 interface PartnerData { id: string; full_name: string; company: string; email: string; }
 interface EventData { id: string; name: string; duration: number; status: string; }
 interface WaitingData { isWaiting: boolean; roundNumber: number; activeCount: number; pendingCount: number; totalMatches: number; allStarted: boolean; lastStartedAt: string | null; }
@@ -167,6 +167,12 @@ export default function MeetingPage() {
             <p style={{ color: '#06b6d4', fontSize: '13px', margin: 0 }}>{partner.company}</p>
           </div>
         )}
+        {match.table_number && (
+          <div style={{ background: 'rgba(239,68,68,0.15)', borderRadius: '12px', padding: '14px', border: '2px solid rgba(239,68,68,0.4)', marginBottom: '16px' }}>
+            <p style={{ color: '#fca5a5', fontSize: '11px', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '2px' }}>MASA NUMARASI</p>
+            <p style={{ color: '#ef4444', fontSize: '36px', fontWeight: 900, margin: 0, lineHeight: 1 }}>MASA {match.table_number}</p>
+          </div>
+        )}
         {match.icebreaker_question && (
           <div style={{ background: 'rgba(139,92,246,0.1)', borderRadius: '12px', padding: '14px', border: '1px solid rgba(139,92,246,0.2)', marginBottom: '16px' }}>
             <p style={{ color: '#c4b5fd', fontSize: '11px', margin: '0 0 4px' }}>💬 Sohbet Başlatıcı</p>
@@ -191,6 +197,12 @@ export default function MeetingPage() {
             <p style={{ color: '#94a3b8', fontSize: '11px', margin: '0 0 4px' }}>Eşleşme Partneriniz</p>
             <h3 style={{ color: '#e2e8f0', fontSize: '18px', fontWeight: 700, margin: '0 0 4px' }}>{partner.full_name}</h3>
             <p style={{ color: '#06b6d4', fontSize: '13px', margin: 0 }}>{partner.company}</p>
+          </div>
+        )}
+        {match.table_number && (
+          <div style={{ background: 'rgba(239,68,68,0.15)', borderRadius: '12px', padding: '14px', border: '2px solid rgba(239,68,68,0.4)', marginBottom: '16px' }}>
+            <p style={{ color: '#fca5a5', fontSize: '11px', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '2px' }}>MASA NUMARASI</p>
+            <p style={{ color: '#ef4444', fontSize: '36px', fontWeight: 900, margin: 0, lineHeight: 1 }}>MASA {match.table_number}</p>
           </div>
         )}
         <div style={{ background: '#fff', borderRadius: '16px', padding: '20px', display: 'inline-block', marginBottom: '16px' }}>
