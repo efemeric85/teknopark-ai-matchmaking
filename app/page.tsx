@@ -8,11 +8,31 @@ interface EventItem { id: string; name: string; date: string; status: string; }
 // ═══════════════════════════════════════════════════════════════
 // KVKK METNİ - Bahtiyar'ın göndereceği metni buraya yapıştır
 // ═══════════════════════════════════════════════════════════════
-const KVKK_TEXT = `[KVKK METNİ BURAYA GELECEK]
+const KVKK_TEXT = `
+Kişisel Verileri Koruma Kurumu 
 
-Bahtiyar'ın göndereceği KVKK aydınlatma metnini bu alanın tamamıyla değiştirin.
+Çalışan Özlük Dosyası Kişisel Verilerin İşlenmesi Aydınlatma Metni
 
-Bu geçici metindir.`;
+Bu aydınlatma metni, 6698 sayılı Kişisel Verilerin Korunması Kanununun 10 uncu maddesi ile Aydınlatma Yükümlülüğünün Yerine Getirilmesinde Uyulacak Usul ve Esaslar Hakkında Tebliğ kapsamında veri sorumlusu sıfatıyla Kişisel Verileri Koruma Kurumu (Kurum) tarafından hazırlanmıştır.
+	
+Kurum tarafından, insan kaynakları süreçlerinin yönetilmesi, çalışanlar için iş akdi ve mevzuattan kaynaklı yükümlülüklerin yerine getirilmesi, çalışanlar için yan haklar ve menfaatleri süreçlerinin yürütülmesi, eğitim faaliyetlerinin yürütülmesi, iş sağlığı ve güvenliği faaliyetlerinin yürütülmesi ile sözleşme süreçlerinin yürütülmesi amacıyla özlük dosyaları kapsamında çalışanlara ait kişisel veriler (ad soyad, TC kimlik no, iletişim, diploma, adli sicil kaydı, eğitim, sağlık, mesleğe ilişkin veriler, mal beyanı, askerlik durumu, fotoğraf, sosyal güvenlik bilgileri, güvenlik soruşturması, izin bilgisi, disiplin bilgisi, bakmakla yükümlü olduğu kişilerin çalışma durumu, kimlik verileri, okul ve sağlık verileri, çocukların öz üvey olma durum bilgisi, çocukların cinsiyeti verileri) işlenmektedir.
+
+Söz konusu kişisel verilerden; 
+
+- sağlık verileri kanunlarda öngörülme (6331 sayılı İş Sağlığı ve Güvenliği Kanunu), istihdam ve iş sağlığı ve güvenliği alanındaki hukuki yükümlülüklerin (Devlet Memurlarına Verilecek Hastalık Raporları ile Hastalık ve Refakat İznine İlişkin Usul ve Esaslar Hakkında Yönetmelik) yerine getirilmesi için zorunlu olması hukuki sebebine, Adli sicil kaydı verileri kanunlarda öngörülme (5352 sayılı Adli Sicil Kanunu) hukuki sebebine, Sendika üyeliğine ilişkin veriler kanunlarda öngörülme (6356 sayılı Sendikalar ve Toplu İş Sözleşmesi Kanunu, 4688 sayılı Kamu Görevlileri Sendikaları ve Toplu Sözleşme Kanunu) hukuki sebebine,
+
+- diğer kişisel veriler ise kanunlarda öngörülme (4857 sayılı İş Kanunu, 657 sayılı Devlet Memurları Kanunu, 5510 sayılı Sosyal Sigortalar ve Genel Sağlık Sigortası Kanunu, 5188 sayılı Özel Güvenlik Hizmetlerine Dair Kanun ve ilgili diğer kanunlar) ve hukuki yükümlülüğün yerine getirilmesi hukuki sebebine,
+
+dayalı olarak elden teslim, posta, kargo aracılığıyla manuel yolla veya ilgili Kurum ve Kuruluşlarla entegrasyon aracılığıyla otomatik yolla işlenmektedir. 
+
+Bu veriler ilgili kanunları gereği yetkili kamu kurum ve kuruluşları ile paylaşılabilecektir. Ayrıca hukuki uyuşmazlıkların giderilmesi veya ilgili mevzuatı gereği talep halinde adli makamlar veya ilgili kolluk kuvvetlerine aktarılabilecektir. 
+
+Kanunun “ilgili kişinin haklarını düzenleyen” 11 inci maddesi kapsamındaki taleplerinizi, Veri Sorumlusuna Başvuru Usul ve Esasları Hakkında Tebliğe göre Kurumun Nasuh Akar Mahallesi 1407 Sokak No: 4 Çankaya /ANKARA adresine yazılı olarak iletebilirsiniz.
+
+
+Kişisel Verileri Koruma Kurumunca hazırlanan Kişisel Verilerin İşlenmesi Aydınlatma Metnini okudum, bilgi edindim.
+
+`;
 // ═══════════════════════════════════════════════════════════════
 
 export default function HomePage() {
