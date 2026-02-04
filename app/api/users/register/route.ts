@@ -17,6 +17,12 @@ export async function POST(request: NextRequest) {
 
     const cleanEmail = email.trim().toLowerCase();
 
+    // ═══ EMAIL FORMAT DOĞRULAMASI ═══
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return NextResponse.json({ error: 'Geçerli bir e-posta adresi giriniz.' }, { status: 400 });
+    }
+
     // Aynı etkinlikte aynı email var mı?
     const { data: existing } = await supabase
       .from('users')
@@ -46,7 +52,6 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      // Race condition: UNIQUE constraint violation
       if (error.code === '23505') {
         return NextResponse.json({
           error: 'Bu etkinliğe zaten kayıtlısınız.',
