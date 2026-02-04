@@ -1,9 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface EventItem { id: string; name: string; date: string; status: string; }
+
+// ═══════════════════════════════════════════════════════════════
+// KVKK METNİ - Bahtiyar'ın göndereceği metni buraya yapıştır
+// ═══════════════════════════════════════════════════════════════
+const KVKK_TEXT = `[KVKK METNİ BURAYA GELECEK]
+
+Bahtiyar'ın göndereceği KVKK aydınlatma metnini bu alanın tamamıyla değiştirin.
+
+Bu geçici metindir.`;
+// ═══════════════════════════════════════════════════════════════
 
 export default function HomePage() {
   const router = useRouter();
@@ -14,6 +24,12 @@ export default function HomePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [fetching, setFetching] = useState(true);
+
+  // KVKK state
+  const [showKvkk, setShowKvkk] = useState(false);
+  const [scrolledToBottom, setScrolledToBottom] = useState(false);
+  const [kvkkAccepted, setKvkkAccepted] = useState(false);
+  const kvkkRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -31,12 +47,32 @@ export default function HomePage() {
     fetchEvents();
   }, []);
 
-  const handleSubmit = async () => {
+  // KVKK scroll detection
+  const handleKvkkScroll = useCallback(() => {
+    const el = kvkkRef.current;
+    if (!el) return;
+    // scrollTop + clientHeight >= scrollHeight - 20px tolerance
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) {
+      setScrolledToBottom(true);
+    }
+  }, []);
+
+  // Form doğrulama ve KVKK adımına geçiş
+  const handleContinueToKvkk = () => {
     if (!selectedEvent) { setError('Lütfen bir etkinlik seçin.'); return; }
     if (!form.full_name.trim() || !form.email.trim() || !form.company.trim()) {
       setError('Ad, e-posta ve şirket alanları zorunludur.');
       return;
     }
+    setError('');
+    setShowKvkk(true);
+    setScrolledToBottom(false);
+    setKvkkAccepted(false);
+  };
+
+  // Kayıt gönderimi
+  const handleSubmit = async () => {
+    if (!kvkkAccepted) return;
 
     setLoading(true);
     setError('');
@@ -44,7 +80,7 @@ export default function HomePage() {
       const res = await fetch('/api/users/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, event_id: selectedEvent.id }),
+        body: JSON.stringify({ ...form, event_id: selectedEvent!.id }),
       });
       const data = await res.json();
 
@@ -99,7 +135,7 @@ export default function HomePage() {
 
   return (
     <div style={pageStyle}>
-      {/* ═══ LOGO: Beyaz, 300px, sayfanın yukarısında, ortada ═══ */}
+      {/* ═══ LOGO ═══ */}
       <div style={{ textAlign: 'center', marginTop: '32px', marginBottom: '24px' }}>
         <img
           src="/logo-white.png"
@@ -154,7 +190,8 @@ export default function HomePage() {
               ))
             )}
           </div>
-        ) : (
+        ) : !showKvkk ? (
+          /* ═══ KAYIT FORMU ═══ */
           <div>
             {events.length > 1 && (
               <div style={{ marginBottom: '12px' }}>
@@ -192,17 +229,108 @@ export default function HomePage() {
                 )}
 
                 <button
-                  onClick={handleSubmit}
-                  disabled={loading}
+                  onClick={handleContinueToKvkk}
                   style={{
-                    padding: '14px', borderRadius: '12px', border: 'none', cursor: loading ? 'wait' : 'pointer',
-                    background: loading ? '#334155' : 'linear-gradient(135deg, #06b6d4, #0891b2)',
+                    padding: '14px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+                    background: 'linear-gradient(135deg, #06b6d4, #0891b2)',
                     color: '#fff', fontSize: '16px', fontWeight: 700,
                   }}
                 >
-                  {loading ? '⏳ Kaydediliyor...' : '🚀 Kayıt Ol'}
+                  Devam Et →
                 </button>
               </div>
+            </div>
+          </div>
+        ) : (
+          /* ═══ KVKK ONAYI ═══ */
+          <div>
+            <div style={{ marginBottom: '12px' }}>
+              <button
+                onClick={() => { setShowKvkk(false); setError(''); }}
+                style={{ background: 'none', border: 'none', color: '#06b6d4', cursor: 'pointer', fontSize: '13px' }}
+              >← Bilgileri Düzenle</button>
+            </div>
+
+            <div style={cardStyle}>
+              <h3 style={{ color: '#06b6d4', fontSize: '16px', fontWeight: 600, margin: '0 0 4px', textAlign: 'center' }}>
+                Kişisel Verilerin Korunması
+              </h3>
+              <p style={{ color: '#64748b', fontSize: '12px', margin: '0 0 16px', textAlign: 'center' }}>
+                Lütfen aşağıdaki metni sonuna kadar okuyunuz.
+              </p>
+
+              {/* Scrollable KVKK text */}
+              <div
+                ref={kvkkRef}
+                onScroll={handleKvkkScroll}
+                style={{
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  background: 'rgba(0,0,0,0.3)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  marginBottom: '16px',
+                }}
+              >
+                <p style={{ color: '#cbd5e1', fontSize: '13px', lineHeight: '1.7', margin: 0, whiteSpace: 'pre-wrap' }}>
+                  {KVKK_TEXT}
+                </p>
+              </div>
+
+              {/* Scroll indicator */}
+              {!scrolledToBottom && (
+                <p style={{ color: '#f59e0b', fontSize: '12px', textAlign: 'center', margin: '0 0 12px' }}>
+                  ↓ Metni sonuna kadar kaydırınız
+                </p>
+              )}
+
+              {/* Kabul checkbox - only visible after scroll */}
+              {scrolledToBottom && (
+                <label
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: '10px',
+                    cursor: 'pointer', marginBottom: '16px',
+                    padding: '12px', borderRadius: '10px',
+                    background: kvkkAccepted ? 'rgba(6,182,212,0.1)' : 'transparent',
+                    border: kvkkAccepted ? '1px solid rgba(6,182,212,0.3)' : '1px solid rgba(255,255,255,0.1)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={kvkkAccepted}
+                    onChange={e => setKvkkAccepted(e.target.checked)}
+                    style={{ marginTop: '2px', accentColor: '#06b6d4', width: '18px', height: '18px', flexShrink: 0 }}
+                  />
+                  <span style={{ color: '#e2e8f0', fontSize: '13px', lineHeight: '1.5' }}>
+                    Yukarıdaki aydınlatma metnini okudum, kişisel verilerimin belirtilen amaçlarla işlenmesini kabul ediyorum.
+                  </span>
+                </label>
+              )}
+
+              {error && (
+                <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px' }}>
+                  <p style={{ color: '#fca5a5', fontSize: '13px', margin: 0 }}>{error}</p>
+                </div>
+              )}
+
+              {/* Kayıt butonu - only active after acceptance */}
+              <button
+                onClick={handleSubmit}
+                disabled={!kvkkAccepted || loading}
+                style={{
+                  width: '100%',
+                  padding: '14px', borderRadius: '12px', border: 'none',
+                  cursor: (!kvkkAccepted || loading) ? 'not-allowed' : 'pointer',
+                  background: (!kvkkAccepted || loading) ? '#334155' : 'linear-gradient(135deg, #06b6d4, #0891b2)',
+                  color: (!kvkkAccepted || loading) ? '#64748b' : '#fff',
+                  fontSize: '16px', fontWeight: 700,
+                  transition: 'all 0.3s',
+                }}
+              >
+                {loading ? '⏳ Kaydediliyor...' : '🚀 Kayıt Ol'}
+              </button>
             </div>
           </div>
         )}
