@@ -9,28 +9,33 @@ interface EventItem { id: string; name: string; date: string; status: string; }
 // KVKK METNİ - Bahtiyar'ın göndereceği metni buraya yapıştır
 // ═══════════════════════════════════════════════════════════════
 const KVKK_TEXT = `
-Kişisel Verileri Koruma Kurumu 
-
-Çalışan Özlük Dosyası Kişisel Verilerin İşlenmesi Aydınlatma Metni
-
-Bu aydınlatma metni, 6698 sayılı Kişisel Verilerin Korunması Kanununun 10 uncu maddesi ile Aydınlatma Yükümlülüğünün Yerine Getirilmesinde Uyulacak Usul ve Esaslar Hakkında Tebliğ kapsamında veri sorumlusu sıfatıyla Kişisel Verileri Koruma Kurumu (Kurum) tarafından hazırlanmıştır.
-	
-Kurum tarafından, insan kaynakları süreçlerinin yönetilmesi, çalışanlar için iş akdi ve mevzuattan kaynaklı yükümlülüklerin yerine getirilmesi, çalışanlar için yan haklar ve menfaatleri süreçlerinin yürütülmesi, eğitim faaliyetlerinin yürütülmesi, iş sağlığı ve güvenliği faaliyetlerinin yürütülmesi ile sözleşme süreçlerinin yürütülmesi amacıyla özlük dosyaları kapsamında çalışanlara ait kişisel veriler (ad soyad, TC kimlik no, iletişim, diploma, adli sicil kaydı, eğitim, sağlık, mesleğe ilişkin veriler, mal beyanı, askerlik durumu, fotoğraf, sosyal güvenlik bilgileri, güvenlik soruşturması, izin bilgisi, disiplin bilgisi, bakmakla yükümlü olduğu kişilerin çalışma durumu, kimlik verileri, okul ve sağlık verileri, çocukların öz üvey olma durum bilgisi, çocukların cinsiyeti verileri) işlenmektedir.
-
-Söz konusu kişisel verilerden; 
-
-- sağlık verileri kanunlarda öngörülme (6331 sayılı İş Sağlığı ve Güvenliği Kanunu), istihdam ve iş sağlığı ve güvenliği alanındaki hukuki yükümlülüklerin (Devlet Memurlarına Verilecek Hastalık Raporları ile Hastalık ve Refakat İznine İlişkin Usul ve Esaslar Hakkında Yönetmelik) yerine getirilmesi için zorunlu olması hukuki sebebine, Adli sicil kaydı verileri kanunlarda öngörülme (5352 sayılı Adli Sicil Kanunu) hukuki sebebine, Sendika üyeliğine ilişkin veriler kanunlarda öngörülme (6356 sayılı Sendikalar ve Toplu İş Sözleşmesi Kanunu, 4688 sayılı Kamu Görevlileri Sendikaları ve Toplu Sözleşme Kanunu) hukuki sebebine,
-
-- diğer kişisel veriler ise kanunlarda öngörülme (4857 sayılı İş Kanunu, 657 sayılı Devlet Memurları Kanunu, 5510 sayılı Sosyal Sigortalar ve Genel Sağlık Sigortası Kanunu, 5188 sayılı Özel Güvenlik Hizmetlerine Dair Kanun ve ilgili diğer kanunlar) ve hukuki yükümlülüğün yerine getirilmesi hukuki sebebine,
-
-dayalı olarak elden teslim, posta, kargo aracılığıyla manuel yolla veya ilgili Kurum ve Kuruluşlarla entegrasyon aracılığıyla otomatik yolla işlenmektedir. 
-
-Bu veriler ilgili kanunları gereği yetkili kamu kurum ve kuruluşları ile paylaşılabilecektir. Ayrıca hukuki uyuşmazlıkların giderilmesi veya ilgili mevzuatı gereği talep halinde adli makamlar veya ilgili kolluk kuvvetlerine aktarılabilecektir. 
-
-Kanunun “ilgili kişinin haklarını düzenleyen” 11 inci maddesi kapsamındaki taleplerinizi, Veri Sorumlusuna Başvuru Usul ve Esasları Hakkında Tebliğe göre Kurumun Nasuh Akar Mahallesi 1407 Sokak No: 4 Çankaya /ANKARA adresine yazılı olarak iletebilirsiniz.
-
-
-Kişisel Verileri Koruma Kurumunca hazırlanan Kişisel Verilerin İşlenmesi Aydınlatma Metnini okudum, bilgi edindim.
+TEKNOPARK ANKARA SPEED NETWORKİNG ETKİNLİĞİ
+KİŞİSEL VERİLERİN İŞLENMESİ AYDINLATMA METNİ
+Bu aydınlatma metni, 6698 sayılı Kişisel Verilerin Korunması Kanununun 10 uncu maddesi ile Aydınlatma Yükümlülüğünün Yerine Getirilmesinde Uyulacak Usul ve Esaslar Hakkında Tebliğ kapsamında veri sorumlusu sıfatıyla Ankara Teknopark Teknoloji Geliştirme Bölgesi Yönetici Anonim Şirketi ("Teknopark Ankara") tarafından hazırlanmıştır.
+1. İşlenen Kişisel Veriler
+Speed Networking etkinliğine katılımınız kapsamında aşağıdaki kişisel verileriniz işlenmektedir:
+Kimlik bilgileri: Ad soyad
+İletişim bilgileri: E-posta adresi
+Mesleki bilgiler: Şirket/kurum adı, pozisyon/unvan
+Etkinlik bilgileri: Networking amacı/beklentisi, eşleşme tercihleri, katılım durumu, eşleşme geçmişi, QR kod okutma kayıtları
+2. Kişisel Verilerin İşlenme Amaçları
+Toplanan kişisel verileriniz aşağıdaki amaçlarla işlenmektedir:
+Etkinlik kaydının oluşturulması ve katılımcı yönetiminin sağlanması, yapay zeka destekli katılımcı eşleştirmesinin gerçekleştirilmesi, eşleşme uyumluluk analizinin yapılması, etkinlik süresince tur yönetimi ve masa atamalarının düzenlenmesi, sohbet başlatıcı soruların oluşturulması, etkinlik istatistiklerinin tutulması ve raporlanması.
+3. Kişisel Verilerin İşlenme Yöntemi ve Hukuki Sebebi
+Kişisel verileriniz, etkinlik kayıt formu aracılığıyla otomatik yolla toplanmakta ve dijital ortamda işlenmektedir.
+Verileriniz, 6698 sayılı Kanunun 5 inci maddesinin 1 inci fıkrası kapsamında açık rızanıza dayalı olarak işlenmektedir.
+Yapay zeka destekli eşleştirme sürecinde, kayıt sırasında belirttiğiniz networking amacı ve mesleki bilgileriniz, uyumlu katılımcılarla eşleştirilmeniz amacıyla otomatik olarak analiz edilmektedir. Bu süreçte herhangi bir profilleme veya otomatik karar alma mekanizması kullanılmamakta olup, nihai eşleştirme etkinlik yöneticisi tarafından onaylanmaktadır.
+4. Kişisel Verilerin Aktarılması
+Kişisel verileriniz, eşleştiğiniz katılımcılarla sınırlı olarak paylaşılmaktadır (ad soyad, şirket, pozisyon). Bunun dışında verileriniz, hukuki yükümlülüklerin yerine getirilmesi amacıyla yetkili kamu kurum ve kuruluşlarına veya adli makamlara yasal zorunluluk halinde aktarılabilecektir.
+Eşleştirme sürecinde kullanılan yapay zeka altyapısı için verileriniz, veri işleyen sıfatıyla hizmet alınan teknoloji sağlayıcılarına (sunucu ve yapay zeka API hizmetleri) aktarılabilmektedir.
+5. Kişisel Verilerin Saklanma Süresi
+Kişisel verileriniz, etkinliğin sona ermesinin ardından etkinlik raporlaması amacıyla en fazla 30 (otuz) gün süreyle saklanacak, bu sürenin sonunda silinecek, yok edilecek veya anonim hale getirilecektir.
+6. İlgili Kişi Olarak Haklarınız
+6698 sayılı Kanunun 11 inci maddesi kapsamında aşağıdaki haklara sahipsiniz:
+Kişisel verilerinizin işlenip işlenmediğini öğrenme, kişisel verileriniz işlenmişse buna ilişkin bilgi talep etme, kişisel verilerinizin işlenme amacını ve bunların amacına uygun kullanılıp kullanılmadığını öğrenme, yurt içinde veya yurt dışında kişisel verilerinizin aktarıldığı üçüncü kişileri bilme, kişisel verilerinizin eksik veya yanlış işlenmiş olması halinde bunların düzeltilmesini isteme, Kanunun 7 nci maddesinde öngörülen şartlar çerçevesinde kişisel verilerinizin silinmesini veya yok edilmesini isteme, yapılan işlemlerin kişisel verilerinizin aktarıldığı üçüncü kişilere bildirilmesini isteme, işlenen verilerinizin münhasıran otomatik sistemler vasıtasıyla analiz edilmesi suretiyle aleyhinize bir sonucun ortaya çıkmasına itiraz etme, kişisel verilerinizin kanuna aykırı olarak işlenmesi sebebiyle zarara uğramanız halinde zararın giderilmesini talep etme.
+Haklarınıza ilişkin taleplerinizi bahtiyar.ozturk@tatgb.com adresine yazılı olarak iletebilirsiniz.
+7. Açık Rıza
+Yukarıdaki aydınlatma metnini okudum ve anladım. Speed Networking etkinliği kapsamında kişisel verilerimin belirtilen amaçlarla işlenmesine, yapay zeka destekli eşleştirme sürecinde kullanılmasına ve eşleştiğim katılımcılarla sınırlı bilgilerimin paylaşılmasına açık rızam ile onay veriyorum.
 
 `;
 // ═══════════════════════════════════════════════════════════════
