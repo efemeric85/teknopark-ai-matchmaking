@@ -409,11 +409,16 @@ export async function POST(
     const maxRounds = event.max_rounds || 5;
     const duration = event.round_duration_sec || event.duration || 360;
 
-    // 2. Get participants
-    const { data: users, error: usersErr } = await supabase
+    // 2. Get participants (only checked-in ones)
+    const { data: allUsersRaw, error: usersErr } = await supabase
       .from('users').select('*').eq('event_id', eventId);
-    if (usersErr || !users || users.length < 2) {
-      return NextResponse.json({ error: 'En az 2 katılımcı gerekli.' }, { status: 400 });
+    if (usersErr) {
+      return NextResponse.json({ error: 'Kullanıcılar çekilemedi: ' + usersErr.message }, { status: 500 });
+    }
+    const users = (allUsersRaw || []).filter((u: any) => u.checked_in === true);
+    if (users.length < 2) {
+      const total = (allUsersRaw || []).length;
+      return NextResponse.json({ error: `En az 2 katılımcı "burada" olarak işaretlenmelidir. Kayıtlı: ${total}, Burada: ${users.length}` }, { status: 400 });
     }
 
     // Max rounds cannot exceed n-1 (each person meets everyone)
