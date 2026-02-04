@@ -10,30 +10,39 @@ interface EventItem { id: string; name: string; date: string; status: string; }
 // ═══════════════════════════════════════════════════════════════
 const KVKK_TEXT = `
 TEKNOPARK ANKARA SPEED NETWORKİNG ETKİNLİĞİ
+
 KİŞİSEL VERİLERİN İŞLENMESİ AYDINLATMA METNİ
+
 Bu aydınlatma metni, 6698 sayılı Kişisel Verilerin Korunması Kanununun 10 uncu maddesi ile Aydınlatma Yükümlülüğünün Yerine Getirilmesinde Uyulacak Usul ve Esaslar Hakkında Tebliğ kapsamında veri sorumlusu sıfatıyla Ankara Teknopark Teknoloji Geliştirme Bölgesi Yönetici Anonim Şirketi ("Teknopark Ankara") tarafından hazırlanmıştır.
+
 1. İşlenen Kişisel Veriler
 Speed Networking etkinliğine katılımınız kapsamında aşağıdaki kişisel verileriniz işlenmektedir:
 Kimlik bilgileri: Ad soyad
 İletişim bilgileri: E-posta adresi
 Mesleki bilgiler: Şirket/kurum adı, pozisyon/unvan
 Etkinlik bilgileri: Networking amacı/beklentisi, eşleşme tercihleri, katılım durumu, eşleşme geçmişi, QR kod okutma kayıtları
+
 2. Kişisel Verilerin İşlenme Amaçları
 Toplanan kişisel verileriniz aşağıdaki amaçlarla işlenmektedir:
 Etkinlik kaydının oluşturulması ve katılımcı yönetiminin sağlanması, yapay zeka destekli katılımcı eşleştirmesinin gerçekleştirilmesi, eşleşme uyumluluk analizinin yapılması, etkinlik süresince tur yönetimi ve masa atamalarının düzenlenmesi, sohbet başlatıcı soruların oluşturulması, etkinlik istatistiklerinin tutulması ve raporlanması.
+
 3. Kişisel Verilerin İşlenme Yöntemi ve Hukuki Sebebi
 Kişisel verileriniz, etkinlik kayıt formu aracılığıyla otomatik yolla toplanmakta ve dijital ortamda işlenmektedir.
 Verileriniz, 6698 sayılı Kanunun 5 inci maddesinin 1 inci fıkrası kapsamında açık rızanıza dayalı olarak işlenmektedir.
 Yapay zeka destekli eşleştirme sürecinde, kayıt sırasında belirttiğiniz networking amacı ve mesleki bilgileriniz, uyumlu katılımcılarla eşleştirilmeniz amacıyla otomatik olarak analiz edilmektedir. Bu süreçte herhangi bir profilleme veya otomatik karar alma mekanizması kullanılmamakta olup, nihai eşleştirme etkinlik yöneticisi tarafından onaylanmaktadır.
+
 4. Kişisel Verilerin Aktarılması
 Kişisel verileriniz, eşleştiğiniz katılımcılarla sınırlı olarak paylaşılmaktadır (ad soyad, şirket, pozisyon). Bunun dışında verileriniz, hukuki yükümlülüklerin yerine getirilmesi amacıyla yetkili kamu kurum ve kuruluşlarına veya adli makamlara yasal zorunluluk halinde aktarılabilecektir.
 Eşleştirme sürecinde kullanılan yapay zeka altyapısı için verileriniz, veri işleyen sıfatıyla hizmet alınan teknoloji sağlayıcılarına (sunucu ve yapay zeka API hizmetleri) aktarılabilmektedir.
+
 5. Kişisel Verilerin Saklanma Süresi
 Kişisel verileriniz, etkinliğin sona ermesinin ardından etkinlik raporlaması amacıyla en fazla 30 (otuz) gün süreyle saklanacak, bu sürenin sonunda silinecek, yok edilecek veya anonim hale getirilecektir.
+
 6. İlgili Kişi Olarak Haklarınız
 6698 sayılı Kanunun 11 inci maddesi kapsamında aşağıdaki haklara sahipsiniz:
 Kişisel verilerinizin işlenip işlenmediğini öğrenme, kişisel verileriniz işlenmişse buna ilişkin bilgi talep etme, kişisel verilerinizin işlenme amacını ve bunların amacına uygun kullanılıp kullanılmadığını öğrenme, yurt içinde veya yurt dışında kişisel verilerinizin aktarıldığı üçüncü kişileri bilme, kişisel verilerinizin eksik veya yanlış işlenmiş olması halinde bunların düzeltilmesini isteme, Kanunun 7 nci maddesinde öngörülen şartlar çerçevesinde kişisel verilerinizin silinmesini veya yok edilmesini isteme, yapılan işlemlerin kişisel verilerinizin aktarıldığı üçüncü kişilere bildirilmesini isteme, işlenen verilerinizin münhasıran otomatik sistemler vasıtasıyla analiz edilmesi suretiyle aleyhinize bir sonucun ortaya çıkmasına itiraz etme, kişisel verilerinizin kanuna aykırı olarak işlenmesi sebebiyle zarara uğramanız halinde zararın giderilmesini talep etme.
 Haklarınıza ilişkin taleplerinizi bahtiyar.ozturk@tatgb.com adresine yazılı olarak iletebilirsiniz.
+
 7. Açık Rıza
 Yukarıdaki aydınlatma metnini okudum ve anladım. Speed Networking etkinliği kapsamında kişisel verilerimin belirtilen amaçlarla işlenmesine, yapay zeka destekli eşleştirme sürecinde kullanılmasına ve eşleştiğim katılımcılarla sınırlı bilgilerimin paylaşılmasına açık rızam ile onay veriyorum.
 
