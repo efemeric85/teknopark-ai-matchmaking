@@ -57,7 +57,6 @@ export default function AdminPage() {
   useEffect(() => {
     const saved = localStorage.getItem('adminToken');
     if (saved) {
-      // Validate saved token with server
       fetch('/api/admin/auth', { headers: { 'x-admin-token': saved } })
         .then(r => r.json())
         .then(d => {
@@ -136,7 +135,6 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (!res.ok) { flash(data.error || 'Güncelleme hatası.', 'err'); setSettingsLoading(false); return; }
-      // Update token
       setAuthToken(data.token);
       localStorage.setItem('adminToken', data.token);
       setSettingsEmail(''); setSettingsPw(''); setSettingsConfirmPw('');
@@ -259,7 +257,6 @@ export default function AdminPage() {
     if (!sel || matches.length === 0 || users.length === 0) return;
     if (!matrixRef.current) return;
 
-    // Load html2canvas + jsPDF from CDN
     const loadScript = (src: string) => new Promise<void>((res, rej) => {
       if (document.querySelector(`script[src="${src}"]`)) return res();
       const s = document.createElement('script'); s.src = src;
@@ -272,7 +269,6 @@ export default function AdminPage() {
     const h2c = (window as any).html2canvas;
     const { jsPDF } = (window as any).jspdf;
 
-    // TÜM turları al (son tur dahil)
     const rounds = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b);
     const pdfCheckedIn = users.filter(u => u.checked_in);
     const pdfAbsent = users.filter(u => !u.checked_in);
@@ -287,7 +283,6 @@ export default function AdminPage() {
     `;
     document.body.appendChild(headerDiv);
 
-    // Katılanlar / Katılmayanlar listeleri
     const attendanceDiv = document.createElement('div');
     attendanceDiv.style.cssText = 'position:absolute;left:-9999px;top:0;background:#fff;padding:0 20px 16px;font-family:-apple-system,Arial,sans-serif;width:800px;';
     const checkedInBadges = pdfCheckedIn.map(u =>
@@ -309,7 +304,6 @@ export default function AdminPage() {
     `;
     document.body.appendChild(attendanceDiv);
 
-    // Geçici div: TÜM turları içerir (son tur dahil)
     const roundsTitleDiv = document.createElement('div');
     roundsTitleDiv.style.cssText = 'position:absolute;left:-9999px;top:0;background:#fff;padding:10px 20px 0;font-family:-apple-system,Arial,sans-serif;width:800px;';
     roundsTitleDiv.innerHTML = `<h3 style="margin:0;font-size:16px;color:#334155;">Tüm Turlar</h3>`;
@@ -340,7 +334,6 @@ export default function AdminPage() {
     matrixTitleDiv.innerHTML = `<h3 style="margin:0;font-size:16px;color:#334155;">Eşleşme Matrisi</h3>`;
     document.body.appendChild(matrixTitleDiv);
 
-    // Capture all sections as screenshots
     const [headerCanvas, attendanceCanvas, roundsTitleCanvas, allRoundsCanvas, matTitleCanvas, matrixCanvas] = await Promise.all([
       h2c(headerDiv, { backgroundColor: '#ffffff', scale: 2 }),
       h2c(attendanceDiv, { backgroundColor: '#ffffff', scale: 2 }),
@@ -350,7 +343,6 @@ export default function AdminPage() {
       h2c(matrixRef.current, { backgroundColor: '#ffffff', scale: 2 }),
     ]);
 
-    // Cleanup temp elements
     document.body.removeChild(headerDiv);
     document.body.removeChild(attendanceDiv);
     document.body.removeChild(roundsTitleDiv);
@@ -364,7 +356,6 @@ export default function AdminPage() {
     const contentW = pageW - margin * 2;
     let y = margin;
 
-    // Helper: add canvas image to PDF, handle page breaks
     const addCanvasImage = (canvas: HTMLCanvasElement) => {
       const img = canvas.toDataURL('image/png');
       const ratio = canvas.height / canvas.width;
@@ -412,21 +403,16 @@ export default function AdminPage() {
   const activeCount = currentRoundMatches.filter(m => m.status === 'active' && !isExpired(m)).length;
   const completedCount = currentRoundMatches.filter(m => m.status === 'completed' || isExpired(m)).length;
 
-  // Find unmatched/waiting user (only among checked-in users)
   const matchedUserIds = new Set<string>();
   currentRoundMatches.forEach(m => { matchedUserIds.add(m.user1_id); matchedUserIds.add(m.user2_id); });
   const waitingUser = currentRound > 0 ? checkedInUsers.find(u => !matchedUserIds.has(u.id)) : null;
 
   const pastRounds = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b);
 
-  // ═══════════════════════════════════════
-  // RENDER: LOADING
-  // ═══════════════════════════════════════
+  // ═══ RENDER: LOADING ═══
   if (!authChecked) return <div style={pageStyle}><p style={{ color: '#94a3b8' }}>Yükleniyor...</p></div>;
 
-  // ═══════════════════════════════════════
-  // RENDER: LOGIN SCREEN
-  // ═══════════════════════════════════════
+  // ═══ RENDER: LOGIN SCREEN ═══
   if (!authToken) {
     return (
       <div style={pageStyle}>
@@ -473,23 +459,29 @@ export default function AdminPage() {
     );
   }
 
-  // ═══════════════════════════════════════
-  // RENDER: MAIN ADMIN PANEL
-  // ═══════════════════════════════════════
+  // ═══ RENDER: MAIN ADMIN PANEL ═══
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: "'Inter','Segoe UI',sans-serif" }}>
-      {/* Top bar */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 50 }}>
-        <h1 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: '#0f172a' }}>⚡ Admin Paneli</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {msg.text && (
-            <span style={{ fontSize: '13px', padding: '4px 12px', borderRadius: '8px', background: msg.type === 'ok' ? '#dcfce7' : '#fee2e2', color: msg.type === 'ok' ? '#166534' : '#991b1b' }}>
-              {msg.text}
-            </span>
-          )}
-          <a href="/" style={{ ...btnSmall, background: '#f0fdfa', color: '#0e7490', border: '1px solid #06b6d4', textDecoration: 'none', display: 'inline-block' }}>🏠 Anasayfa</a>
-          <button onClick={handleLogout} style={{ ...btnSmall, background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5' }}>Çıkış</button>
-          <button onClick={() => setShowSettings(!showSettings)} style={{ ...btnSmall, background: showSettings ? '#dbeafe' : '#f1f5f9', color: '#334155', border: '1px solid #e2e8f0' }}>⚙️</button>
+      {/* ═══ TOP BAR - BÜYÜK LOGO VE BAŞLIK ═══ */}
+      <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', padding: '0', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <img src="/logo-white.png" alt="Teknopark Ankara" style={{ height: '44px', width: 'auto' }} />
+            <div>
+              <h1 style={{ fontSize: '22px', fontWeight: 800, margin: 0, color: '#fff' }}>⚡ Admin Paneli</h1>
+              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0', letterSpacing: '1px' }}>Speed Networking Yönetimi</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {msg.text && (
+              <span style={{ fontSize: '13px', padding: '4px 12px', borderRadius: '8px', background: msg.type === 'ok' ? '#dcfce7' : '#fee2e2', color: msg.type === 'ok' ? '#166534' : '#991b1b' }}>
+                {msg.text}
+              </span>
+            )}
+            <a href="/" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px', background: 'rgba(6,182,212,0.15)', color: '#67e8f9', border: '1px solid rgba(6,182,212,0.3)', fontSize: '14px', fontWeight: 600, whiteSpace: 'nowrap' as const }}>🏠 Anasayfa</a>
+            <button onClick={handleLogout} style={{ padding: '8px 14px', borderRadius: '8px', background: 'rgba(239,68,68,0.15)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.3)', cursor: 'pointer', fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' as const }}>Çıkış</button>
+            <button onClick={() => setShowSettings(!showSettings)} style={{ padding: '8px 12px', borderRadius: '8px', background: showSettings ? 'rgba(96,165,250,0.2)' : 'rgba(255,255,255,0.08)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', fontSize: '13px', whiteSpace: 'nowrap' as const }}>⚙️</button>
+          </div>
         </div>
       </div>
 
@@ -641,7 +633,7 @@ export default function AdminPage() {
                           />
                         </label>
                         <div>
-                          <span style={{ fontWeight: 600, fontSize: '13px', color: p.checked_in ? '#0f172a' : '#94a3b8', textDecoration: p.checked_in ? 'none' : 'none' }}>{p.full_name}</span>
+                          <span style={{ fontWeight: 600, fontSize: '13px', color: p.checked_in ? '#0f172a' : '#94a3b8' }}>{p.full_name}</span>
                           <span style={{ color: '#64748b', fontSize: '12px', marginLeft: '8px' }}>{p.company}</span>
                           <span style={{ color: '#94a3b8', fontSize: '11px', marginLeft: '8px' }}>{p.email}</span>
                         </div>
