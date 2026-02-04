@@ -274,18 +274,47 @@ export default function AdminPage() {
 
     // TÜM turları al (son tur dahil)
     const rounds = [...new Set(matches.map(m => m.round_number))].sort((a, b) => a - b);
+    const pdfCheckedIn = users.filter(u => u.checked_in);
+    const pdfAbsent = users.filter(u => !u.checked_in);
+
     const headerDiv = document.createElement('div');
     headerDiv.style.cssText = 'position:absolute;left:-9999px;top:0;background:#fff;padding:20px;font-family:-apple-system,Arial,sans-serif;width:800px;';
     headerDiv.innerHTML = `
       <h2 style="margin:0 0 8px 0;font-size:20px;color:#1e293b;">⚡ ${sel.name}</h2>
       <p style="margin:2px 0;font-size:13px;color:#334155;"><b>Tarih:</b> ${fmtDate(sel.date)}</p>
-      <p style="margin:2px 0;font-size:13px;color:#334155;"><b>Katılımcı:</b> ${users.length} kişi</p>
+      <p style="margin:2px 0;font-size:13px;color:#334155;"><b>Kayıtlı:</b> ${users.length} kişi &nbsp;|&nbsp; <b>Katılan:</b> ${pdfCheckedIn.length} &nbsp;|&nbsp; <b style="color:#dc2626;">Katılmayan:</b> ${pdfAbsent.length}</p>
       <p style="margin:2px 0;font-size:13px;color:#334155;"><b>Toplam Tur:</b> ${rounds.length}</p>
-      <h3 style="margin:16px 0 0 0;font-size:16px;color:#334155;">Tüm Turlar</h3>
     `;
     document.body.appendChild(headerDiv);
 
+    // Katılanlar / Katılmayanlar listeleri
+    const attendanceDiv = document.createElement('div');
+    attendanceDiv.style.cssText = 'position:absolute;left:-9999px;top:0;background:#fff;padding:0 20px 16px;font-family:-apple-system,Arial,sans-serif;width:800px;';
+    const checkedInBadges = pdfCheckedIn.map(u =>
+      `<span style="font-size:11px;padding:3px 10px;border-radius:6px;background:#dcfce7;color:#166534;display:inline-block;border:1px solid #86efac;">${u.full_name} (${u.company})</span>`
+    ).join(' ');
+    const absentBadges = pdfAbsent.map(u =>
+      `<span style="font-size:11px;padding:3px 10px;border-radius:6px;background:#fef2f2;color:#991b1b;display:inline-block;border:1px solid #fecaca;">${u.full_name} (${u.company})</span>`
+    ).join(' ');
+    attendanceDiv.innerHTML = `
+      <div style="padding:10px 14px;border-radius:8px;background:#f0fdf4;border:1px solid #86efac;margin-bottom:8px;">
+        <p style="font-size:12px;font-weight:700;color:#166534;margin:0 0 6px;">✅ Katılanlar (${pdfCheckedIn.length})</p>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;">${checkedInBadges || '<span style="font-size:11px;color:#94a3b8;">Yok</span>'}</div>
+      </div>
+      ${pdfAbsent.length > 0 ? `
+      <div style="padding:10px 14px;border-radius:8px;background:#fef2f2;border:1px solid #fecaca;">
+        <p style="font-size:12px;font-weight:700;color:#991b1b;margin:0 0 6px;">✗ Katılmayanlar (${pdfAbsent.length})</p>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;">${absentBadges}</div>
+      </div>` : ''}
+    `;
+    document.body.appendChild(attendanceDiv);
+
     // Geçici div: TÜM turları içerir (son tur dahil)
+    const roundsTitleDiv = document.createElement('div');
+    roundsTitleDiv.style.cssText = 'position:absolute;left:-9999px;top:0;background:#fff;padding:10px 20px 0;font-family:-apple-system,Arial,sans-serif;width:800px;';
+    roundsTitleDiv.innerHTML = `<h3 style="margin:0;font-size:16px;color:#334155;">Tüm Turlar</h3>`;
+    document.body.appendChild(roundsTitleDiv);
+
     const allRoundsDiv = document.createElement('div');
     allRoundsDiv.style.cssText = 'position:absolute;left:-9999px;top:0;background:#fff;padding:0 20px 20px;font-family:-apple-system,Arial,sans-serif;width:800px;';
     allRoundsDiv.innerHTML = rounds.map(r => {
@@ -312,8 +341,10 @@ export default function AdminPage() {
     document.body.appendChild(matrixTitleDiv);
 
     // Capture all sections as screenshots
-    const [headerCanvas, allRoundsCanvas, matTitleCanvas, matrixCanvas] = await Promise.all([
+    const [headerCanvas, attendanceCanvas, roundsTitleCanvas, allRoundsCanvas, matTitleCanvas, matrixCanvas] = await Promise.all([
       h2c(headerDiv, { backgroundColor: '#ffffff', scale: 2 }),
+      h2c(attendanceDiv, { backgroundColor: '#ffffff', scale: 2 }),
+      h2c(roundsTitleDiv, { backgroundColor: '#ffffff', scale: 2 }),
       h2c(allRoundsDiv, { backgroundColor: '#ffffff', scale: 2 }),
       h2c(matrixTitleDiv, { backgroundColor: '#ffffff', scale: 2 }),
       h2c(matrixRef.current, { backgroundColor: '#ffffff', scale: 2 }),
@@ -321,6 +352,8 @@ export default function AdminPage() {
 
     // Cleanup temp elements
     document.body.removeChild(headerDiv);
+    document.body.removeChild(attendanceDiv);
+    document.body.removeChild(roundsTitleDiv);
     document.body.removeChild(allRoundsDiv);
     document.body.removeChild(matrixTitleDiv);
 
@@ -344,6 +377,9 @@ export default function AdminPage() {
     };
 
     addCanvasImage(headerCanvas);
+    addCanvasImage(attendanceCanvas);
+    y += 4;
+    addCanvasImage(roundsTitleCanvas);
     addCanvasImage(allRoundsCanvas);
     y += 4;
     addCanvasImage(matTitleCanvas);
@@ -810,27 +846,49 @@ export default function AdminPage() {
                     <thead>
                       <tr>
                         <th style={thStyle}></th>
-                        {users.map(u => <th key={u.id} style={{ ...thStyle, whiteSpace: 'nowrap', fontSize: '10px', padding: '4px 6px' }}>{u.full_name.split(' ')[0]}</th>)}
+                        {users.map(u => (
+                          <th key={u.id} style={{
+                            ...thStyle, whiteSpace: 'nowrap', fontSize: '10px', padding: '4px 6px',
+                            background: u.checked_in ? '#f8fafc' : '#fef2f2',
+                            color: u.checked_in ? '#64748b' : '#dc2626',
+                          }}>
+                            {u.full_name.split(' ')[0]}{!u.checked_in ? ' ✗' : ''}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {users.map(row => (
-                        <tr key={row.id}>
-                          <td style={{ ...tdStyle, fontWeight: 600, whiteSpace: 'nowrap' }}>{row.full_name.split(' ')[0]}</td>
-                          {users.map(col => {
-                            if (row.id === col.id) return <td key={col.id} style={{ ...tdStyle, background: '#334155' }}></td>;
-                            const m = matches.find(m =>
-                              (m.user1_id === row.id && m.user2_id === col.id) ||
-                              (m.user2_id === row.id && m.user1_id === col.id)
-                            );
-                            return (
-                              <td key={col.id} style={{ ...tdStyle, background: m ? '#dcfce7' : '#fff', textAlign: 'center' }}>
-                                {m ? m.round_number : ''}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
+                      {users.map(row => {
+                        const rowAbsent = !row.checked_in;
+                        return (
+                          <tr key={row.id}>
+                            <td style={{
+                              ...tdStyle, fontWeight: 600, whiteSpace: 'nowrap',
+                              background: rowAbsent ? '#fef2f2' : undefined,
+                              color: rowAbsent ? '#dc2626' : '#334155',
+                            }}>
+                              {row.full_name.split(' ')[0]}{rowAbsent ? ' ✗' : ''}
+                            </td>
+                            {users.map(col => {
+                              if (row.id === col.id) return <td key={col.id} style={{ ...tdStyle, background: '#334155' }}></td>;
+                              const colAbsent = !col.checked_in;
+                              const eitherAbsent = rowAbsent || colAbsent;
+                              const m = matches.find(m =>
+                                (m.user1_id === row.id && m.user2_id === col.id) ||
+                                (m.user2_id === row.id && m.user1_id === col.id)
+                              );
+                              return (
+                                <td key={col.id} style={{
+                                  ...tdStyle, textAlign: 'center',
+                                  background: m ? '#dcfce7' : eitherAbsent ? '#fef2f2' : '#fff',
+                                }}>
+                                  {m ? m.round_number : ''}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                   </div>
