@@ -1,232 +1,278 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-export const dynamic = 'force-dynamic';
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+'use client';
 
-const SAFE_USER_FIELDS = 'id, email, full_name, company, position, current_intent, event_id, checked_in, created_at';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useParams } from 'next/navigation';
+import { QRCodeSVG as QRCode } from 'qrcode.react';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { userId: string } }
-) {
-  try {
-    const identifier = decodeURIComponent(params.userId || '');
-    if (!identifier) {
-      return NextResponse.json({ error: 'Kullanıcı kimliği gerekli' }, { status: 400 });
-    }
+interface UserData { id: string; full_name: string; company: string; email: string; position?: string; }
+interface MatchData { id: string; status: string; started_at: string | null; round_number: number; table_number?: number | null; icebreaker_question?: string | null; }
+interface PartnerData { id: string; full_name: string; company: string; email: string; }
+interface EventData { id: string; name: string; duration: number; status: string; }
+interface WaitingData { isWaiting: boolean; roundNumber: number; activeCount: number; pendingCount: number; totalMatches: number; allStarted: boolean; lastStartedAt: string | null; }
+interface RoundInfo { current: number; max: number; participantCount: number; allCompleted: boolean; }
+interface EventListItem { id: string; name: string; status: string; duration: number; }
 
-    const { searchParams } = new URL(request.url);
-    const eventIdParam = searchParams.get('event_id');
-    const isEmail = identifier.includes('@');
+const S = {
+  page: { minHeight: '100vh', display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)', fontFamily: "'Inter', 'Segoe UI', sans-serif", padding: '16px' } as React.CSSProperties,
+  card: { background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.1)', padding: '28px 20px', maxWidth: '420px', width: '100%', textAlign: 'center' as const } as React.CSSProperties,
+};
 
-    // ═══ 1. KULLANICIYI BUL ═══
-    let user;
-    if (isEmail) {
-      const { data, error } = await supabase
-        .from('users')
-        .select(SAFE_USER_FIELDS)
-        .eq('email', identifier)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      if (error || !data) {
-        return NextResponse.json({
-          v: 'V15', error: 'Kullanıcı bulunamadı',
-          user: null, match: null, partner: null, event: null,
-          waiting: null, roundInfo: null
-        });
+export default function MeetingPage() {
+  const params = useParams();
+  const userId = decodeURIComponent(params.userId as string);
+
+  const [user, setUser] = useState<UserData | null>(null);
+  const [match, setMatch] = useState<MatchData | null>(null);
+  const [partner, setPartner] = useState<PartnerData | null>(null);
+  const [event, setEvent] = useState<EventData | null>(null);
+  const [waiting, setWaiting] = useState<WaitingData | null>(null);
+  const [roundInfo, setRoundInfo] = useState<RoundInfo | null>(null);
+  const [allEvents, setAllEvents] = useState<EventListItem[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+  const prevMatchRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const t = setInterval(() => setTick(p => p + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const eventParam = selectedEventId ? `?event_id=${selectedEventId}` : '';
+      const sep = eventParam ? '&' : '?';
+      const url = `/api/meeting/${encodeURIComponent(userId)}${eventParam}${sep}_t=${Date.now()}`;
+      const res = await fetch(url, { cache: 'no-store' });
+      const data = await res.json();
+      if (data.error && !data.user) { setError(data.error); return; }
+      setUser(data.user);
+      setMatch(data.match);
+      setPartner(data.partner);
+      setEvent(data.event);
+      setWaiting(data.waiting);
+      setRoundInfo(data.roundInfo || null);
+      if (data.allEvents) setAllEvents(data.allEvents);
+      setError(null);
+      const newMatchId = data.match?.id || 'none';
+      if (prevMatchRef.current && prevMatchRef.current !== newMatchId) {
+        console.log('[MEETING] Match changed:', prevMatchRef.current, '->', newMatchId);
       }
-      user = data;
-    } else {
-      const { data, error } = await supabase
-        .from('users')
-        .select(SAFE_USER_FIELDS)
-        .eq('id', identifier)
-        .single();
-      if (error || !data) {
-        return NextResponse.json({
-          v: 'V15', error: 'Kullanıcı bulunamadı',
-          user: null, match: null, partner: null, event: null,
-          waiting: null, roundInfo: null
-        });
-      }
-      user = data;
-    }
+      prevMatchRef.current = newMatchId;
+    } catch (e: any) { console.error('[MEETING] Fetch error:', e); }
+  }, [userId, selectedEventId]);
 
-    // ═══ 2. EVENT BELİRLE ═══
-    const eventId = eventIdParam || user.event_id;
+  useEffect(() => { fetchData(); const iv = setInterval(fetchData, 3000); return () => clearInterval(iv); }, [fetchData]);
 
-    // Tüm eventleri al (selector için)
-    const { data: allEventsData } = await supabase
-      .from('events')
-      .select('id, name, status, duration, round_duration_sec')
-      .order('created_at', { ascending: false });
+  const calcRemaining = (): number => {
+    if (!match?.started_at) return 0;
+    const dur = event?.duration || 360;
+    return Math.max(0, Math.ceil(dur - (Date.now() - new Date(match.started_at).getTime()) / 1000));
+  };
 
-    const userInfo = {
-      id: user.id,
-      full_name: user.full_name,
-      email: user.email,
-      company: user.company,
-      position: user.position
-    };
+  const calcWaitRemaining = (): number | null => {
+    if (!waiting?.allStarted || !waiting?.lastStartedAt) return null;
+    const dur = event?.duration || 360;
+    return Math.max(0, Math.ceil(dur - (Date.now() - new Date(waiting.lastStartedAt).getTime()) / 1000));
+  };
 
-    if (!eventId) {
-      return NextResponse.json({
-        v: 'V15', user: userInfo,
-        match: null, partner: null, event: null,
-        waiting: null, roundInfo: null,
-        allEvents: allEventsData || [],
-        message: 'Aktif etkinlik bulunamadı.'
-      });
-    }
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+  const tCol = (s: number) => s <= 30 ? '#ef4444' : s <= 60 ? '#f59e0b' : '#10b981';
 
-    // ═══ 3. EVENT DETAYLARI ═══
-    const { data: event } = await supabase
-      .from('events')
-      .select('id, name, status, duration, round_duration_sec')
-      .eq('id', eventId)
-      .single();
+  const homeBtn = (
+    <a href="/" style={{ color: '#94a3b8', fontSize: '14px', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px', marginBottom: '16px', padding: '8px 16px', borderRadius: '10px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', transition: 'all 0.2s' }}>🏠 Anasayfa</a>
+  );
 
-    if (!event) {
-      return NextResponse.json({
-        v: 'V15', user: userInfo,
-        match: null, partner: null, event: null,
-        waiting: null, roundInfo: null,
-        allEvents: allEventsData || [],
-        error: 'Etkinlik bulunamadı'
-      });
-    }
+  const userCard = user ? (
+    <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '12px', padding: '10px 16px', marginBottom: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <p style={{ color: '#e2e8f0', fontSize: '14px', fontWeight: 700, margin: '0 0 2px' }}>{user.full_name}</p>
+      <p style={{ color: '#06b6d4', fontSize: '12px', margin: '0 0 2px' }}>{user.company}{user.position ? ` / ${user.position}` : ''}</p>
+      <p style={{ color: '#64748b', fontSize: '11px', margin: 0 }}>{user.email}</p>
+    </div>
+  ) : null;
 
-    // ═══ 4. BU KULLANICINıN EŞLEŞMELERİNİ BUL ═══
-    // DOĞRU KOLON ADLARI: user1_id ve user2_id
-    const { data: matchesA, error: errA } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('user1_id', user.id)
-      .eq('event_id', eventId);
+  const evSelector = allEvents.length > 1 ? (
+    <div style={{ marginBottom: '12px' }}>
+      <select
+        value={selectedEventId || event?.id || ''}
+        onChange={e => setSelectedEventId(e.target.value || null)}
+        style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.08)', color: '#e2e8f0', fontSize: '12px', width: '100%' }}
+      >
+        {allEvents.map(ev => (
+          <option key={ev.id} value={ev.id} style={{ background: '#1e293b' }}>
+            {ev.name} {ev.status === 'active' ? '(Aktif)' : '(Taslak)'}
+          </option>
+        ))}
+      </select>
+    </div>
+  ) : null;
 
-    const { data: matchesB, error: errB } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('user2_id', user.id)
-      .eq('event_id', eventId);
+  const header = (
+    <div style={{ marginBottom: '20px' }}>
+      {homeBtn}
+      <div style={{ marginBottom: '12px' }}>
+        <img
+          src="/logo-white.png"
+          alt="Teknopark Ankara"
+          style={{ width: '200px', height: 'auto', display: 'block', margin: '0 auto' }}
+        />
+      </div>
+      <p style={{ color: '#94a3b8', fontSize: '14px', letterSpacing: '4px', margin: '0 0 4px', textTransform: 'uppercase', fontWeight: 600 }}>TEKNOPARK ANKARA</p>
+      <p style={{ color: '#e2e8f0', fontSize: '20px', fontWeight: 700, margin: '0 0 4px' }}>🤝 Speed Networking</p>
+      {event && <p style={{ color: '#06b6d4', fontSize: '18px', fontWeight: 700, margin: '0 0 12px' }}>{event.name}</p>}
+      {evSelector}
+      {userCard}
+      {roundInfo && roundInfo.max > 0 && (
+        <div style={{ background: 'rgba(255,255,255,0.08)', borderRadius: '10px', padding: '8px 16px', display: 'inline-block' }}>
+          <span style={{ color: '#e2e8f0', fontSize: '16px', fontWeight: 700 }}>{roundInfo.current}</span>
+          <span style={{ color: '#06b6d4', fontSize: '12px', margin: '0 0 0 2px' }}>/{roundInfo.max}</span>
+        </div>
+      )}
+    </div>
+  );
 
-    if (errA) console.error('[V15] matches user1_id error:', errA);
-    if (errB) console.error('[V15] matches user2_id error:', errB);
+  if (error && !user) return (
+    <div style={S.page}><div style={S.card}>{homeBtn}
+      <div style={{ fontSize: '48px', marginBottom: '12px' }}>⚠️</div>
+      <h2 style={{ color: '#f59e0b', fontSize: '18px', fontWeight: 700, margin: '0 0 8px' }}>Hata</h2>
+      <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>{error}</p>
+    </div></div>
+  );
 
-    const allMatches = [...(matchesA || []), ...(matchesB || [])];
+  if (!user) return (
+    <div style={S.page}><div style={S.card}>
+      <div style={{ fontSize: '40px', marginBottom: '12px' }}>⏳</div>
+      <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>Yükleniyor...</p>
+    </div></div>
+  );
 
-    // Deduplicate
-    const uniqueMatches = allMatches.filter((m, i, self) =>
-      i === self.findIndex((x) => x.id === m.id)
+  if (roundInfo?.allCompleted && !match) return (
+    <div style={S.page}><div style={S.card}>{header}
+      <div style={{ background: 'rgba(16,185,129,0.1)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(16,185,129,0.2)' }}>
+        <div style={{ fontSize: '48px', marginBottom: '8px' }}>🎉</div>
+        <h2 style={{ color: '#6ee7b7', fontSize: '20px', fontWeight: 700, margin: '0 0 8px' }}>Tüm Turlar Tamamlandı!</h2>
+        <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0, lineHeight: 1.5 }}>Etkinlik sona erdi. Katılımınız için teşekkürler! 🙏</p>
+      </div>
+    </div></div>
+  );
+
+  // ACTIVE MATCH
+  if (match?.status === 'active' && match.started_at) {
+    const remaining = calcRemaining();
+    if (remaining <= 0) return (
+      <div style={S.page}><div style={S.card}>{header}
+        <div style={{ background: 'rgba(16,185,129,0.1)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(16,185,129,0.2)' }}>
+          <div style={{ fontSize: '48px', marginBottom: '8px' }}>⏰</div>
+          <h2 style={{ color: '#6ee7b7', fontSize: '20px', fontWeight: 700, margin: '0 0 8px' }}>Tur Tamamlandı!</h2>
+          <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>Yeni tur başladığında otomatik güncellenecek.</p>
+        </div>
+        <p style={{ color: '#475569', fontSize: '11px', marginTop: '12px' }}>Tur {match.round_number}</p>
+      </div></div>
     );
 
-    // ═══ 5. AKTİF VEYA PENDING MATCH BUL (en yüksek tur) ═══
-    const currentMatch = uniqueMatches
-      .filter(m => m.status === 'active' || m.status === 'pending')
-      .sort((a, b) => b.round_number - a.round_number)[0] || null;
-
-    // ═══ 6. PARTNER BİLGİSİ ═══
-    let partner = null;
-    if (currentMatch) {
-      const partnerId = currentMatch.user1_id === user.id
-        ? currentMatch.user2_id
-        : currentMatch.user1_id;
-
-      const { data: partnerData } = await supabase
-        .from('users')
-        .select('id, full_name, company, email, position')
-        .eq('id', partnerId)
-        .single();
-
-      partner = partnerData || null;
-    }
-
-    // ═══ 7. ROUND BİLGİSİ ═══
-    const { data: allEventMatches } = await supabase
-      .from('matches')
-      .select('round_number, status')
-      .eq('event_id', eventId);
-
-    const maxRound = allEventMatches && allEventMatches.length > 0
-      ? Math.max(...allEventMatches.map(m => m.round_number))
-      : 0;
-
-    const { data: participants } = await supabase
-      .from('users')
-      .select('id')
-      .eq('event_id', eventId)
-      .eq('checked_in', true);
-
-    const allCompleted = uniqueMatches.length > 0 &&
-      uniqueMatches.every(m => m.status === 'completed');
-
-    const roundInfo = {
-      current: currentMatch?.round_number || maxRound || 0,
-      max: maxRound,
-      participantCount: participants?.length || 0,
-      allCompleted: allCompleted && !currentMatch
-    };
-
-    // ═══ 8. BEKLEME DURUMU (tek kalan katılımcı) ═══
-    let waiting = null;
-    if (!currentMatch && maxRound > 0 && !allCompleted) {
-      const currentRoundMatches = allEventMatches?.filter(m => m.round_number === maxRound) || [];
-      const activeCount = currentRoundMatches.filter(m => m.status === 'active').length;
-      const pendingCount = currentRoundMatches.filter(m => m.status === 'pending').length;
-
-      if (activeCount > 0 || pendingCount > 0) {
-        // Son started_at'ı bul
-        const { data: activeInRound } = await supabase
-          .from('matches')
-          .select('started_at')
-          .eq('event_id', eventId)
-          .eq('round_number', maxRound)
-          .eq('status', 'active')
-          .not('started_at', 'is', null)
-          .order('started_at', { ascending: false })
-          .limit(1);
-
-        const lastStartedAt = activeInRound?.[0]?.started_at || null;
-
-        waiting = {
-          isWaiting: true,
-          roundNumber: maxRound,
-          activeCount,
-          pendingCount,
-          totalMatches: currentRoundMatches.length,
-          allStarted: pendingCount === 0 && activeCount > 0,
-          lastStartedAt
-        };
-      }
-    }
-
-    // ═══ 9. FRONTEND FORMAT ═══
-    const formattedMatch = currentMatch ? {
-      id: currentMatch.id,
-      status: currentMatch.status,
-      started_at: currentMatch.started_at,
-      round_number: currentMatch.round_number,
-      table_number: currentMatch.table_number,
-      icebreaker_question: currentMatch.icebreaker_question
-    } : null;
-
-    return NextResponse.json({
-      v: 'V15',
-      user: userInfo,
-      match: formattedMatch,
-      partner,
-      event: { id: event.id, name: event.name, duration: event.round_duration_sec || event.duration || 360, status: event.status },
-      waiting,
-      roundInfo,
-      allEvents: allEventsData || []
-    });
-
-  } catch (error: any) {
-    console.error('[V15] Error fetching meeting data:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return (
+      <div style={S.page}><div style={S.card}>{header}
+        {partner && (
+          <div style={{ background: 'rgba(6,182,212,0.1)', borderRadius: '16px', padding: '20px', border: '1px solid rgba(6,182,212,0.2)', marginBottom: '16px' }}>
+            <p style={{ color: '#94a3b8', fontSize: '11px', margin: '0 0 4px' }}>Görüşme Partneriniz</p>
+            <h3 style={{ color: '#e2e8f0', fontSize: '20px', fontWeight: 700, margin: '0 0 4px' }}>{partner.full_name}</h3>
+            <p style={{ color: '#06b6d4', fontSize: '13px', margin: 0 }}>{partner.company}</p>
+          </div>
+        )}
+        {match.table_number && (
+          <div style={{ background: 'rgba(239,68,68,0.15)', borderRadius: '12px', padding: '14px', border: '2px solid rgba(239,68,68,0.4)', marginBottom: '16px' }}>
+            <p style={{ color: '#fca5a5', fontSize: '11px', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '2px' }}>MASA NUMARASI</p>
+            <p style={{ color: '#ef4444', fontSize: '36px', fontWeight: 900, margin: 0, lineHeight: 1 }}>MASA {match.table_number}</p>
+          </div>
+        )}
+        {match.icebreaker_question && (
+          <div style={{ background: 'rgba(139,92,246,0.1)', borderRadius: '12px', padding: '14px', border: '1px solid rgba(139,92,246,0.2)', marginBottom: '16px' }}>
+            <p style={{ color: '#c4b5fd', fontSize: '11px', margin: '0 0 4px' }}>💬 Sohbet Başlatıcı</p>
+            <p style={{ color: '#e2e8f0', fontSize: '13px', margin: 0, lineHeight: 1.4 }}>{match.icebreaker_question}</p>
+          </div>
+        )}
+        <div style={{ marginTop: '8px' }}>
+          <div style={{ fontSize: '56px', fontWeight: 800, color: tCol(remaining), fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmt(remaining)}</div>
+          <p style={{ color: '#64748b', fontSize: '11px', margin: '8px 0 0' }}>Tur {match.round_number}</p>
+        </div>
+      </div></div>
+    );
   }
+
+  // PENDING MATCH - QR CODE
+  if (match?.status === 'pending') {
+    const qrUrl = typeof window !== 'undefined' ? `${window.location.origin}/activate/${match.id}` : `/activate/${match.id}`;
+    return (
+      <div style={S.page}><div style={S.card}>{header}
+        {partner && (
+          <div style={{ background: 'rgba(6,182,212,0.1)', borderRadius: '16px', padding: '16px', border: '1px solid rgba(6,182,212,0.2)', marginBottom: '16px' }}>
+            <p style={{ color: '#94a3b8', fontSize: '11px', margin: '0 0 4px' }}>Eşleşme Partneriniz</p>
+            <h3 style={{ color: '#e2e8f0', fontSize: '18px', fontWeight: 700, margin: '0 0 4px' }}>{partner.full_name}</h3>
+            <p style={{ color: '#06b6d4', fontSize: '13px', margin: 0 }}>{partner.company}</p>
+          </div>
+        )}
+        {match.table_number && (
+          <div style={{ background: 'rgba(239,68,68,0.15)', borderRadius: '12px', padding: '14px', border: '2px solid rgba(239,68,68,0.4)', marginBottom: '16px' }}>
+            <p style={{ color: '#fca5a5', fontSize: '11px', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '2px' }}>MASA NUMARASI</p>
+            <p style={{ color: '#ef4444', fontSize: '36px', fontWeight: 900, margin: 0, lineHeight: 1 }}>MASA {match.table_number}</p>
+          </div>
+        )}
+        <div style={{ background: '#fff', borderRadius: '16px', padding: '20px', display: 'inline-block', marginBottom: '16px' }}>
+          <QRCode value={qrUrl} size={180} />
+        </div>
+        <p style={{ color: '#06b6d4', fontSize: '14px', fontWeight: 600, margin: '0 0 4px' }}>QR Kodu Okutun</p>
+        <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>Partneriniz bu QR kodu okutup ismini seçince sayaç başlayacak.</p>
+        <p style={{ color: '#475569', fontSize: '11px', marginTop: '12px' }}>Tur {match.round_number}</p>
+      </div></div>
+    );
+  }
+
+  // WAITING (odd participant)
+  if (waiting?.isWaiting) {
+    const wr = calcWaitRemaining();
+    return (
+      <div style={S.page}><div style={S.card}>{header}
+        <div style={{ background: 'rgba(245,158,11,0.1)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(245,158,11,0.2)' }}>
+          <div style={{ fontSize: '40px', marginBottom: '8px' }}>⏳</div>
+          <h2 style={{ color: '#fbbf24', fontSize: '18px', fontWeight: 600, margin: '0 0 8px' }}>Bu Turda Eşleşme Yapılmadı</h2>
+          <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 12px', lineHeight: 1.5 }}>
+            Tek sayıda katılımcı olduğu için bu turda beklemektesiniz. Bir sonraki turda eşleşeceksiniz.
+          </p>
+          {wr !== null && wr > 0 && (
+            <div>
+              <div style={{ fontSize: '36px', fontWeight: 700, color: tCol(wr), fontVariantNumeric: 'tabular-nums' }}>{fmt(wr)}</div>
+              <p style={{ color: '#64748b', fontSize: '11px', margin: '4px 0 0' }}>Tur bitişine kalan süre</p>
+            </div>
+          )}
+          {wr !== null && wr <= 0 && (
+            <p style={{ color: '#94a3b8', fontSize: '13px' }}>Tur tamamlandı. Yeni tur bekleniyor...</p>
+          )}
+        </div>
+        <p style={{ color: '#475569', fontSize: '11px', marginTop: '12px' }}>Tur {waiting.roundNumber}</p>
+      </div></div>
+    );
+  }
+
+  // NO MATCH YET
+  if (!match && !waiting) return (
+    <div style={S.page}><div style={S.card}>{header}
+      <div style={{ background: 'rgba(6,182,212,0.1)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(6,182,212,0.2)' }}>
+        <div style={{ fontSize: '40px', marginBottom: '8px' }}>🎯</div>
+        <h2 style={{ color: '#06b6d4', fontSize: '18px', fontWeight: 600, margin: '0 0 8px' }}>Eşleşme Bekleniyor</h2>
+        <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0, lineHeight: 1.5 }}>Eşleşme yapıldığında sayfa otomatik güncellenecek.</p>
+      </div>
+    </div></div>
+  );
+
+  // COMPLETED fallback
+  return (
+    <div style={S.page}><div style={S.card}>{header}
+      <div style={{ background: 'rgba(16,185,129,0.1)', borderRadius: '16px', padding: '24px', border: '1px solid rgba(16,185,129,0.2)' }}>
+        <div style={{ fontSize: '40px', marginBottom: '8px' }}>⏰</div>
+        <h2 style={{ color: '#6ee7b7', fontSize: '20px', fontWeight: 700, margin: '0 0 8px' }}>Tur Tamamlandı!</h2>
+        <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>Yeni tur başladığında otomatik güncellenecek.</p>
+      </div>
+      {match && <p style={{ color: '#475569', fontSize: '11px', marginTop: '12px' }}>Tur {match.round_number}</p>}
+    </div></div>
+  );
 }
