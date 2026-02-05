@@ -41,7 +41,9 @@ export default function MeetingPage() {
   const fetchData = useCallback(async () => {
     try {
       const eventParam = selectedEventId ? `?event_id=${selectedEventId}` : '';
-      const res = await fetch(`/api/meeting/${encodeURIComponent(userId)}${eventParam}`, { cache: 'no-store' });
+      const sep = eventParam ? '&' : '?';
+      const url = `/api/meeting/${encodeURIComponent(userId)}${eventParam}${sep}_t=${Date.now()}`;
+      const res = await fetch(url, { cache: 'no-store' });
       const data = await res.json();
       if (data.error && !data.user) { setError(data.error); return; }
       setUser(data.user);
@@ -108,7 +110,6 @@ export default function MeetingPage() {
   const header = (
     <div style={{ marginBottom: '20px' }}>
       {homeBtn}
-      {/* ═══ LOGO ═══ */}
       <div style={{ marginBottom: '12px' }}>
         <img
           src="/logo-white.png"
