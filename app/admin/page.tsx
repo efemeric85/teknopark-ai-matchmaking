@@ -1,12 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Supabase direct access removed for security - all DB operations go through API routes
 
 interface Event { id: string; name: string; date: string; duration: number; round_duration_sec?: number; max_rounds?: number; status: string; created_at?: string; }
 interface User { id: string; full_name: string; company: string; position: string; email: string; event_id: string; current_intent?: string; checked_in?: boolean; }
@@ -146,66 +141,97 @@ export default function AdminPage() {
 
   // ═══ Data loaders ═══
   const loadEvents = async () => {
-    const { data } = await supabase.from('events').select('*').order('created_at', { ascending: false });
-    if (data) {
-      setEvents(data);
-      if (sel) {
-        const updated = data.find(e => e.id === sel.id);
-        if (updated) setSel(updated);
+    try {
+      const res = await fetch('/api/admin/events', { headers: { 'x-admin-token': authToken || '' } });
+      const json = await res.json();
+      const data = json.data || [];
+      if (data) {
+        setEvents(data);
+        if (sel) {
+          const updated = data.find((e: Event) => e.id === sel.id);
+          if (updated) setSel(updated);
+        }
       }
-    }
+    } catch (e) { console.error('loadEvents error:', e); }
   };
 
   const loadUsers = async (eventId: string) => {
-    const { data } = await supabase.from('users').select('*').eq('event_id', eventId).order('full_name');
-    if (data) setUsers(data);
+    try {
+      const res = await fetch(`/api/admin/events/${eventId}/users`, { headers: { 'x-admin-token': authToken || '' } });
+      const json = await res.json();
+      if (json.data) setUsers(json.data);
+    } catch (e) { console.error('loadUsers error:', e); }
   };
 
   const loadMatches = async (eventId: string) => {
-    const { data } = await supabase.from('matches').select('*').eq('event_id', eventId).order('round_number').order('table_number');
-    if (data) setMatches(data);
+    try {
+      const res = await fetch(`/api/admin/events/${eventId}/matches`, { headers: { 'x-admin-token': authToken || '' } });
+      const json = await res.json();
+      if (json.data) setMatches(json.data);
+    } catch (e) { console.error('loadMatches error:', e); }
   };
 
   // ═══ Event CRUD ═══
   const createEvent = async () => {
     if (!newName.trim()) { flash('Etkinlik adı gerekli.', 'err'); return; }
     setLoading('create');
-    const { error } = await supabase.from('events').insert({
-      name: newName.trim(),
-      date: newDate || new Date().toISOString().split('T')[0],
-      duration: newDuration,
-      round_duration_sec: newDuration,
-      max_rounds: newMaxRounds,
-      status: 'draft',
-    });
-    if (error) flash('Hata: ' + error.message, 'err');
-    else { flash('Etkinlik oluşturuldu.', 'ok'); setNewName(''); setNewDate(''); setNewDuration(360); setNewMaxRounds(5); loadEvents(); }
+    try {
+      const res = await fetch('/api/admin/events', {
+        method: 'POST',
+        headers: apiHeaders(),
+        body: JSON.stringify({
+          name: newName.trim(),
+          date: newDate || new Date().toISOString().split('T')[0],
+          duration: newDuration,
+          round_duration_sec: newDuration,
+          max_rounds: newMaxRounds,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) flash('Hata: ' + (data.error || 'Bilinmeyen hata'), 'err');
+      else { flash('Etkinlik oluşturuldu.', 'ok'); setNewName(''); setNewDate(''); setNewDuration(360); setNewMaxRounds(5); loadEvents(); }
+    } catch (e: any) { flash(e.message, 'err'); }
     setLoading(null);
   };
 
   const toggleEventStatus = async (ev: Event) => {
     const s = ev.status === 'active' ? 'draft' : 'active';
-    await supabase.from('events').update({ status: s }).eq('id', ev.id);
-    loadEvents();
-    if (sel?.id === ev.id) setSel({ ...sel, status: s });
+    try {
+      await fetch(`/api/admin/events/${ev.id}`, {
+        method: 'PUT',
+        headers: apiHeaders(),
+        body: JSON.stringify({ status: s }),
+      });
+      loadEvents();
+      if (sel?.id === ev.id) setSel({ ...sel, status: s });
+    } catch (e: any) { flash(e.message, 'err'); }
   };
 
   const deleteEvent = async (id: string) => {
     if (!confirm('Etkinliği ve tüm verilerini silmek istediğinize emin misiniz?')) return;
-    await supabase.from('matches').delete().eq('event_id', id);
-    await supabase.from('users').delete().eq('event_id', id);
-    await supabase.from('events').delete().eq('id', id);
-    if (sel?.id === id) { setSel(null); setUsers([]); setMatches([]); }
-    loadEvents();
-    flash('Etkinlik silindi.', 'ok');
+    try {
+      await fetch(`/api/admin/events/${id}`, {
+        method: 'DELETE',
+        headers: apiHeaders(),
+      });
+      if (sel?.id === id) { setSel(null); setUsers([]); setMatches([]); }
+      loadEvents();
+      flash('Etkinlik silindi.', 'ok');
+    } catch (e: any) { flash(e.message, 'err'); }
   };
 
   const updateMaxRounds = async (val: number) => {
     if (!sel) return;
     const clamped = Math.max(1, Math.min(50, val));
-    await supabase.from('events').update({ max_rounds: clamped }).eq('id', sel.id);
-    setSel({ ...sel, max_rounds: clamped });
-    flash(`Maksimum tur: ${clamped}`, 'ok');
+    try {
+      await fetch(`/api/admin/events/${sel.id}`, {
+        method: 'PUT',
+        headers: apiHeaders(),
+        body: JSON.stringify({ max_rounds: clamped }),
+      });
+      setSel({ ...sel, max_rounds: clamped });
+      flash(`Maksimum tur: ${clamped}`, 'ok');
+    } catch (e: any) { flash(e.message, 'err'); }
   };
 
   // ═══ Match operations (with auth) ═══
@@ -228,8 +254,11 @@ export default function AdminPage() {
     if (!sel || !confirm('Tüm eşleşmeleri sıfırlamak istediğinize emin misiniz?')) return;
     setLoading('reset');
     try {
-      const { error } = await supabase.from('matches').delete().eq('event_id', sel.id);
-      if (error) throw error;
+      const res = await fetch(`/api/admin/events/${sel.id}/matches`, {
+        method: 'DELETE',
+        headers: apiHeaders(),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
       setMatches([]);
       flash('Tüm eşleşmeler sıfırlandı.', 'ok');
     } catch (e: any) { flash(e.message, 'err'); }
@@ -237,20 +266,26 @@ export default function AdminPage() {
   };
 
   const handleManualStart = async (matchId: string) => {
-    await supabase.from('matches')
-      .update({ status: 'active', started_at: new Date().toISOString() })
-      .eq('id', matchId).eq('status', 'pending');
-    if (sel) loadMatches(sel.id);
+    try {
+      await fetch(`/api/admin/matches/${matchId}/start`, {
+        method: 'PUT',
+        headers: apiHeaders(),
+      });
+      if (sel) loadMatches(sel.id);
+    } catch (e: any) { flash(e.message, 'err'); }
   };
 
   const handleStartAll = async () => {
     const pendingIds = currentRoundMatches.filter(m => m.status === 'pending').map(m => m.id);
     if (pendingIds.length === 0) return;
-    const now = new Date().toISOString();
-    await supabase.from('matches')
-      .update({ status: 'active', started_at: now })
-      .in('id', pendingIds);
-    if (sel) loadMatches(sel.id);
+    try {
+      await fetch('/api/admin/matches/bulk-start', {
+        method: 'POST',
+        headers: apiHeaders(),
+        body: JSON.stringify({ matchIds: pendingIds }),
+      });
+      if (sel) loadMatches(sel.id);
+    } catch (e: any) { flash(e.message, 'err'); }
   };
 
   const handleExportPdf = async () => {
@@ -594,13 +629,21 @@ export default function AdminPage() {
                     <>
                       <button onClick={async () => {
                         const ids = users.map(u => u.id);
-                        await supabase.from('users').update({ checked_in: true }).in('id', ids);
+                        await fetch('/api/admin/users/bulk-checkin', {
+                          method: 'POST',
+                          headers: apiHeaders(),
+                          body: JSON.stringify({ userIds: ids, checked_in: true }),
+                        });
                         if (sel) loadUsers(sel.id);
                         flash('Tümü burada olarak işaretlendi.', 'ok');
                       }} style={{ ...btnSmall, background: '#dcfce7', color: '#166534' }}>Hepsini İşaretle</button>
                       <button onClick={async () => {
                         const ids = users.map(u => u.id);
-                        await supabase.from('users').update({ checked_in: false }).in('id', ids);
+                        await fetch('/api/admin/users/bulk-checkin', {
+                          method: 'POST',
+                          headers: apiHeaders(),
+                          body: JSON.stringify({ userIds: ids, checked_in: false }),
+                        });
                         if (sel) loadUsers(sel.id);
                         flash('Tüm işaretler kaldırıldı.', 'ok');
                       }} style={{ ...btnSmall, background: '#fee2e2', color: '#991b1b' }}>Hepsini Kaldır</button>
@@ -626,7 +669,11 @@ export default function AdminPage() {
                             checked={!!p.checked_in}
                             onChange={async () => {
                               const newVal = !p.checked_in;
-                              await supabase.from('users').update({ checked_in: newVal }).eq('id', p.id);
+                              await fetch(`/api/admin/users/${p.id}/checkin`, {
+                                method: 'PUT',
+                                headers: apiHeaders(),
+                                body: JSON.stringify({ checked_in: newVal }),
+                              });
                               setUsers(prev => prev.map(u => u.id === p.id ? { ...u, checked_in: newVal } : u));
                             }}
                             style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#10b981' }}
