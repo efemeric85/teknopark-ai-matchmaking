@@ -1,179 +1,225 @@
-# AI-Powered B2B Networking & Matchmaking App
+# Teknopark AI Matchmaking
 
-A real-time, AI-powered networking application designed for B2B events and speed networking sessions. The system uses OpenAI embeddings and cosine similarity to intelligently match participants based on their professional profiles and networking goals.
+Networking etkinlikleri için yapay zeka destekli katılımcı eşleştirme uygulaması. Katılımcıları mesleki hedeflerine göre akıllı eşleştirir, QR kod ile sohbet başlatır, tur bazlı yönetim ve gerçek zamanlı sayaç sunar.
 
-Built for a technopark organization to facilitate meaningful connections at corporate networking events.
+**Canlı:** [atyzk.vercel.app](https://atyzk.vercel.app)
 
-## Live Demo
+## Ne Yapar?
 
-> **Note:** The live demo requires an active Supabase database with participant data. To test locally, follow the setup instructions below.
+Etkinlik organizatörü katılımcıları kaydeder, sistem Türkçe NLP tabanlı TF-IDF algoritmasıyla en uyumlu çiftleri eşleştirir, her çifte masa numarası atar. Katılımcılar telefonlarında QR kod görür, partnerlerinin QR kodunu okutunca geri sayım sayacı başlar. Admin panelinden tüm süreç canlı takip edilir.
 
-## Features
+## Teknik Altyapı
 
-### AI-Powered Matching
-- Generates vector embeddings from participant profiles using OpenAI's `text-embedding-3-small` model (1536 dimensions)
-- Calculates cosine similarity scores between all participants
-- Uses TF-IDF weighting and backtracking algorithm for optimal match distribution
-- Ensures each participant gets the most relevant connections
+| Katman | Teknoloji |
+|--------|-----------|
+| Frontend | Next.js 14, React 18, Tailwind CSS |
+| Backend | Next.js API Routes (serverless) |
+| Veritabanı | Supabase (PostgreSQL) |
+| NLP/Eşleştirme | Türkçe TF-IDF + Complementary Scoring |
+| QR Kod | qrcode.react (render) + html5-qrcode (okuma) |
+| PDF Export | html2canvas + jsPDF (CDN) |
+| Deploy | Vercel |
 
-### Event Management (Admin Panel)
-- Create and manage networking events with custom themes
-- Configure round duration (default: 6 minutes per match)
-- Set maximum number of rounds
-- Start/stop matching rounds with one click
-- Real-time overview of all active matches
-- PDF export of all rounds with match details and scores
-- Auto-handles odd number of participants (waiting queue system)
-
-### Participant Experience
-- Simple registration: name, company, position, and "What are you looking for?" prompt
-- QR code-based handshake to start each meeting
-- Real-time countdown timer synced with server
-- AI-generated icebreaker questions tailored to each pair
-- View match history and partner details
-
-### Technical Highlights
-- Real-time synchronization across all devices
-- Server-side timer management (no client-side drift)
-- QR race condition handling for simultaneous scans
-- Auto-completion of expired matches
-- Middleware-based API authentication
-- Duplicate registration prevention
-- Progressive Web App (PWA) support
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 14 (App Router) |
-| Database | Supabase (PostgreSQL + pgvector) |
-| AI | OpenAI API (embeddings + icebreaker generation) |
-| Auth | Custom token-based admin authentication |
-| Styling | Tailwind CSS |
-| QR | qrcode.react + html5-qrcode |
-| Deployment | Vercel |
-
-## Project Structure
+## Proje Yapısı
 
 ```
 app/
-├── page.tsx                          # Landing page + participant registration
-├── admin/page.tsx                    # Admin panel (event management, rounds, PDF export)
-├── meeting/[userId]/page.tsx         # Participant meeting view (QR, timer, partner info)
+├── page.tsx                          # Landing page (kayıt formu + KVKK)
+├── admin/page.tsx                    # Admin paneli (963 satır)
+├── meeting/[userId]/page.tsx         # Katılımcı sayfası (QR + sayaç)
 ├── activate/[matchId]/
-│   ├── page.tsx                      # QR scan activation page
-│   └── go/route.ts                   # Handshake confirmation endpoint
+│   ├── page.tsx                      # QR okutma sayfası (isim seçimi)
+│   └── go/route.ts                   # QR handshake API (race condition korumalı)
 ├── api/
-│   ├── auth/route.ts                 # Admin login + token generation
-│   ├── users/
-│   │   ├── register/route.ts         # Participant registration + embedding generation
-│   │   └── login/route.ts            # Participant login
 │   ├── events/
-│   │   ├── route.ts                  # List/create events
-│   │   └── [id]/
-│   │       ├── route.ts              # Get/update/delete event
-│   │       ├── activate/route.ts     # Activate event
-│   │       └── rounds/route.ts       # Start new matching round
-│   ├── match/route.ts                # AI matching algorithm (core logic)
-│   ├── meeting/[userId]/route.ts     # Get current match + timer data
-│   └── matches/
-│       └── [id]/route.ts             # Individual match operations
-├── middleware.ts                      # API route protection
-components/ui/                         # Reusable UI components (shadcn/ui)
-hooks/                                 # Custom React hooks
-lib/                                   # Utility functions + Supabase client
+│   │   ├── route.ts                  # Etkinlik CRUD
+│   │   └── [id]/match/route.ts       # Eşleştirme motoru (601 satır)
+│   ├── meeting/[userId]/route.ts     # Katılımcı veri API (V16)
+│   ├── users/
+│   │   ├── login/route.ts            # Email ile giriş
+│   │   └── register/route.ts         # Kayıt (email validation)
+│   ├── admin/auth/route.ts           # Admin login + credential management
+│   └── debug/route.ts                # Debug endpoint (auth korumalı)
+├── middleware.ts                      # Route bazlı auth kontrolü
+└── lib/supabase.ts                   # Supabase client
 ```
 
-## How It Works
+## Eşleştirme Algoritması
 
-```
-1. REGISTRATION (30 sec)
-   Participant fills out: name, company, position
-   + answers: "What am I looking for today?"
-   → OpenAI generates a 1536-dim embedding vector
+Sistem OpenAI API kullanmaz. Eşleştirme tamamen sunucu tarafında Türkçe NLP ile çalışır:
 
-2. AI MATCHING (automatic)
-   Admin clicks "Start Matching"
-   → System calculates cosine similarity between all participants
-   → TF-IDF scoring + backtracking finds optimal pairs
-   → Table assignments generated
+1. Katılımcıların `current_intent` (networking hedefi) alanları Türkçe tokenizer ile parçalanır (stopword filtreleme, lowercase, 2+ karakter)
+2. TF-IDF vektörleri hesaplanır, cosine similarity ile alan benzerliği (domain score) bulunur
+3. Complementary scoring: "yatırımcı arıyorum" ile "yatırım yapıyorum" gibi tamamlayıcı çiftlere bonus puan verilir
+4. Final skor: %30 domain similarity + %70 complementary score
+5. Backtracking algoritması ile tekrarsız optimal eşleşme bulunur (küçük gruplarda)
+6. Wait fairness: Tek kişi kalınca BYE round uygulanır, aynı kişi art arda beklememesi sağlanır
 
-3. MEETING (6 min per round)
-   Two participants meet at assigned table
-   → Scan each other's QR code to start timer
-   → AI-generated icebreaker question displayed
-   → Server-synced countdown (3 min each side)
-   → Auto-completes when time expires
+## Özellikler
 
-4. NEXT ROUND
-   Admin starts next round
-   → New matches generated (no repeat pairs)
-   → Process repeats for configured number of rounds
-```
+### Admin Paneli
+- Çoklu etkinlik yönetimi (oluştur, yayınla/taslağa al, sil)
+- Tek tuşla AI eşleştirme
+- Her eşleşme için canlı geri sayım sayacı (renk geçişli: yeşil > sarı > kırmızı)
+- Manuel başlatma (QR beklemeden admin elle başlatabilir)
+- Toplu başlatma ("Hepsini Başlat" butonu)
+- Tur yönetimi (Sonraki Tur / Tümünü Sıfırla)
+- Eşleşme matrisi (kimin kiminle hangi turda görüştüğü)
+- PDF export (tüm turlar + matris)
+- İstatistik kutuları (Bekleyen / Aktif / Tamamlanan / Beklemede)
+- Masa numarası ataması
+- Admin credential değiştirme
 
-## Setup & Installation
+### Katılımcı Sayfası
+- Eşleşme beklerken bekleme ekranı
+- Eşleşme sonrası QR kod gösterimi
+- Partner bilgileri (isim, şirket, pozisyon)
+- Masa numarası (büyük kırmızı yazı)
+- QR okutulunca otomatik sayaç başlangıcı
+- Süre bitince otomatik tamamlanma
 
-### Prerequisites
+### QR Handshake Akışı
+1. Katılımcı A telefonunda QR kodu gösterir
+2. Katılımcı B QR kodu okutup kendi ismini seçer
+3. `go/route.ts` match'i `pending` → `active` yapar
+4. Race condition koruması: iki kişi aynı anda okutsa bile ikisi de meeting sayfasına yönlendirilir
+5. Her iki telefondan da geri sayım sayacı senkronize çalışır
+
+### Kayıt
+- KVKK onay metni
+- Email format doğrulaması
+- Aynı etkinliğe mükerrer kayıt engeli
+- Çoklu etkinlik desteği (landing page sadece aktif etkinlikleri gösterir)
+
+## Supabase Tabloları
+
+| Tablo | Açıklama |
+|-------|----------|
+| `users` | Katılımcılar (full_name, email, company, position, current_intent, event_id) |
+| `events` | Etkinlikler (name, status, duration, round_duration_sec, max_rounds, event_date) |
+| `matches` | Eşleşmeler (user1_id, user2_id, round_number, status, started_at, table_number, compatibility_score, icebreaker_question) |
+| `admin_settings` | Admin credentials (email, password) |
+
+## Kurulum
+
+### Gereksinimler
 - Node.js 18+
-- Supabase account (with pgvector extension enabled)
-- OpenAI API key
+- Supabase hesabı
+- Vercel hesabı (deploy için)
 
 ### Environment Variables
 
-Create a `.env` file in the project root:
-
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-OPENAI_API_KEY=your_openai_api_key
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
 ```
 
-### Database Setup
-
-Enable the pgvector extension in Supabase SQL Editor:
+### Supabase Tablo Oluşturma
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS vector;
+CREATE TABLE admin_settings (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  email TEXT NOT NULL,
+  password TEXT NOT NULL
+);
+
+INSERT INTO admin_settings (email, password) VALUES ('admin@teknopark.com', 'changeme');
+
+CREATE TABLE events (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  status TEXT DEFAULT 'active',
+  duration INTEGER DEFAULT 360,
+  round_duration_sec INTEGER DEFAULT 360,
+  max_rounds INTEGER DEFAULT 5,
+  event_date DATE,
+  event_time TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE users (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  full_name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  company TEXT NOT NULL,
+  position TEXT DEFAULT '',
+  current_intent TEXT DEFAULT '',
+  event_id UUID REFERENCES events(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(email, event_id)
+);
+
+CREATE TABLE matches (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  event_id UUID REFERENCES events(id),
+  user1_id UUID REFERENCES users(id),
+  user2_id UUID REFERENCES users(id),
+  round_number INTEGER NOT NULL,
+  status TEXT DEFAULT 'pending',
+  started_at TIMESTAMPTZ,
+  table_number INTEGER DEFAULT 1,
+  compatibility_score FLOAT DEFAULT 0,
+  icebreaker_question TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 ```
 
-Required tables: `events`, `users`, `matches`, `admin_settings`. The application will reference these tables through Supabase client queries.
-
-### Run Locally
+### Local Geliştirme
 
 ```bash
 git clone https://github.com/efemeric85/teknopark-ai-matchmaking.git
 cd teknopark-ai-matchmaking
-npm install
-npm run dev
+yarn install
+cp .env.example .env  # env değişkenlerini doldur
+yarn dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) for the participant view.
-Open [http://localhost:3000/admin](http://localhost:3000/admin) for the admin panel.
+Tarayıcıda `http://localhost:3000` adresini aç.
 
-### Deploy to Vercel
+### Vercel Deploy
 
-1. Push to GitHub
-2. Connect repo in Vercel dashboard
-3. Add environment variables in Vercel > Settings > Environment Variables
-4. Deploy
+1. GitHub repo'sunu Vercel'e bağla
+2. Environment variables'ları Vercel dashboard'dan ekle
+3. Her push otomatik deploy olur
 
-## Matching Algorithm
+## API Endpoints
 
-The core matching logic (`app/api/match/route.ts`) works in several stages:
+| Method | Endpoint | Auth | Açıklama |
+|--------|----------|------|----------|
+| GET | `/api/events` | Public | Aktif etkinlikleri listele |
+| POST | `/api/events` | Admin | Yeni etkinlik oluştur |
+| POST | `/api/events/[id]/match` | Admin | Eşleştirme başlat / sonraki tur |
+| DELETE | `/api/events/[id]/match` | Admin | Tüm eşleşmeleri sıfırla |
+| GET | `/api/meeting/[userId]` | Public | Katılımcı verisi (match, partner, event, timer) |
+| POST | `/api/users/register` | Public | Katılımcı kaydı |
+| POST | `/api/users/login` | Public | Email ile giriş |
+| GET | `/api/activate/[matchId]/go` | Public | QR handshake (match aktifleştirme) |
+| POST | `/api/admin/auth` | Mixed | Admin login + credential değiştirme |
+| GET | `/api/debug` | Admin | Sistem durumu |
 
-1. **Embedding Generation:** Each participant's "What am I looking for?" answer is converted to a 1536-dimensional vector using OpenAI's `text-embedding-3-small`
-2. **Similarity Matrix:** Cosine similarity is calculated between all participant pairs
-3. **TF-IDF Scoring:** Keyword importance is weighted to prioritize specific over generic matches
-4. **Optimal Pairing:** A backtracking algorithm finds the best global assignment, avoiding repeat matches from previous rounds
-5. **Icebreaker Generation:** OpenAI generates a contextual conversation starter for each matched pair
+## Güvenlik
+
+- Admin endpoint'leri `x-admin-token` header'ı gerektirir (middleware.ts)
+- Token: SHA-256(email + password + "teknopark-2026")
+- Katılımcı endpoint'leri public (email bazlı erişim)
+- Service Role Key sadece server-side API route'larında kullanılır
+- `.env` dosyası `.gitignore`'da, repoya commit edilmez
+
+## Bilinen Kısıtlamalar
+
+- Admin şifresi Supabase'de plaintext saklanır (hash yok)
+- Supabase RLS (Row Level Security) aktif değil
+- PDF export CDN bağımlı (html2canvas + jsPDF cloudflare CDN'den yüklenir)
+- Admin token expire olmaz, session yönetimi yok
+- `packageManager` alanı Corepack uyumsuzluğuna sebep olabilir
+
+## Lisans
+
+Bu proje özel kullanım içindir.
 
 ## Author
 
 **Efe Meric** | [RichMe AI](https://richmeai.com)
-04.02.2026
+05.02.2026
 AI Automation & Process Optimization Consultant
-
----
-
-*Built as a real-world solution for a technopark organization's B2B networking events.*
