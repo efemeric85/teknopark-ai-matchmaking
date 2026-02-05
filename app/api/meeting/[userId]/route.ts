@@ -34,7 +34,7 @@ export async function GET(
         .single();
       if (error || !data) {
         return NextResponse.json({
-          v: 'V14', error: 'Kullanıcı bulunamadı',
+          v: 'V15', error: 'Kullanıcı bulunamadı',
           user: null, match: null, partner: null, event: null,
           waiting: null, roundInfo: null
         });
@@ -48,7 +48,7 @@ export async function GET(
         .single();
       if (error || !data) {
         return NextResponse.json({
-          v: 'V14', error: 'Kullanıcı bulunamadı',
+          v: 'V15', error: 'Kullanıcı bulunamadı',
           user: null, match: null, partner: null, event: null,
           waiting: null, roundInfo: null
         });
@@ -62,7 +62,7 @@ export async function GET(
     // Tüm eventleri al (selector için)
     const { data: allEventsData } = await supabase
       .from('events')
-      .select('id, name, status, duration')
+      .select('id, name, status, duration, round_duration_sec')
       .order('created_at', { ascending: false });
 
     const userInfo = {
@@ -75,7 +75,7 @@ export async function GET(
 
     if (!eventId) {
       return NextResponse.json({
-        v: 'V14', user: userInfo,
+        v: 'V15', user: userInfo,
         match: null, partner: null, event: null,
         waiting: null, roundInfo: null,
         allEvents: allEventsData || [],
@@ -86,13 +86,13 @@ export async function GET(
     // ═══ 3. EVENT DETAYLARI ═══
     const { data: event } = await supabase
       .from('events')
-      .select('id, name, status, duration')
+      .select('id, name, status, duration, round_duration_sec')
       .eq('id', eventId)
       .single();
 
     if (!event) {
       return NextResponse.json({
-        v: 'V14', user: userInfo,
+        v: 'V15', user: userInfo,
         match: null, partner: null, event: null,
         waiting: null, roundInfo: null,
         allEvents: allEventsData || [],
@@ -114,8 +114,8 @@ export async function GET(
       .eq('user2_id', user.id)
       .eq('event_id', eventId);
 
-    if (errA) console.error('[V13] matches user1_id error:', errA);
-    if (errB) console.error('[V13] matches user2_id error:', errB);
+    if (errA) console.error('[V15] matches user1_id error:', errA);
+    if (errB) console.error('[V15] matches user2_id error:', errB);
 
     const allMatches = [...(matchesA || []), ...(matchesB || [])];
 
@@ -215,18 +215,18 @@ export async function GET(
     } : null;
 
     return NextResponse.json({
-      v: 'V14',
+      v: 'V15',
       user: userInfo,
       match: formattedMatch,
       partner,
-      event: { id: event.id, name: event.name, duration: event.duration, status: event.status },
+      event: { id: event.id, name: event.name, duration: event.round_duration_sec || event.duration || 360, status: event.status },
       waiting,
       roundInfo,
       allEvents: allEventsData || []
     });
 
   } catch (error: any) {
-    console.error('[V13] Error fetching meeting data:', error);
+    console.error('[V15] Error fetching meeting data:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
