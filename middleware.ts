@@ -13,9 +13,12 @@ export async function middleware(request: NextRequest) {
   if (path.startsWith('/api/meeting')) return NextResponse.next();
   if (path.startsWith('/api/admin/auth')) return NextResponse.next();
 
-  // ═══ GET istekleri public (anasayfa etkinlik listesi, match okuma vs.) ═══
-  // TEK İSTİSNA: /api/debug GET de korunacak
-  if (method === 'GET' && !path.startsWith('/api/debug')) {
+  // ═══ /api/admin/* ROUTE'LARI HER ZAMAN TOKEN GEREKTİRİR (GET dahil) ═══
+  if (path.startsWith('/api/admin/')) {
+    // Fall through to token check below
+  }
+  // ═══ Diğer GET istekleri public (anasayfa etkinlik listesi, match okuma vs.) ═══
+  else if (method === 'GET' && !path.startsWith('/api/debug')) {
     return NextResponse.next();
   }
 
