@@ -63,13 +63,15 @@ export default function MeetingPage() {
   useEffect(() => { fetchData(); const iv = setInterval(fetchData, 3000); return () => clearInterval(iv); }, [fetchData]);
 
   const calcRemaining = (): number => {
-    if (!match?.started_at || !event?.duration) return 0;
-    return Math.max(0, Math.ceil(event.duration - (Date.now() - new Date(match.started_at).getTime()) / 1000));
+    if (!match?.started_at) return 0;
+    const dur = event?.duration || 360;
+    return Math.max(0, Math.ceil(dur - (Date.now() - new Date(match.started_at).getTime()) / 1000));
   };
 
   const calcWaitRemaining = (): number | null => {
-    if (!waiting?.allStarted || !waiting?.lastStartedAt || !event?.duration) return null;
-    return Math.max(0, Math.ceil(event.duration - (Date.now() - new Date(waiting.lastStartedAt).getTime()) / 1000));
+    if (!waiting?.allStarted || !waiting?.lastStartedAt) return null;
+    const dur = event?.duration || 360;
+    return Math.max(0, Math.ceil(dur - (Date.now() - new Date(waiting.lastStartedAt).getTime()) / 1000));
   };
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
