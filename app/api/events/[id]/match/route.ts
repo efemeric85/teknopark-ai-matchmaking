@@ -44,6 +44,48 @@ function tokenize(text: string): string[] {
     .filter(t => t.length > 2 && !STOP_WORDS.has(t));
 }
 
+// ═══════════════════════════════════════════
+// SAME COMPANY DETECTION (>= 70% similarity)
+// ═══════════════════════════════════════════
+
+function normalizeCompany(name: string): string {
+  return name
+    .toLocaleLowerCase('tr')
+    .replace(/\s*(a\.ş\.|a\.s\.|ltd\.|şti\.|sti\.|inc\.|corp\.|llc|gmbh|teknoloji|technology|yazılım|software|bilişim|danışmanlık|consulting)\s*/gi, '')
+    .replace(/[^a-zğüşıöç0-9]/g, '')
+    .trim();
+}
+
+function companySimilarity(a: string, b: string): number {
+  const na = normalizeCompany(a);
+  const nb = normalizeCompany(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  
+  // Levenshtein distance based similarity
+  const maxLen = Math.max(na.length, nb.length);
+  if (maxLen === 0) return 0;
+  
+  const matrix: number[][] = [];
+  for (let i = 0; i <= na.length; i++) {
+    matrix[i] = [i];
+    for (let j = 1; j <= nb.length; j++) {
+      if (i === 0) matrix[i][j] = j;
+      else {
+        const cost = na[i - 1] === nb[j - 1] ? 0 : 1;
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + cost
+        );
+      }
+    }
+  }
+  
+  const distance = matrix[na.length][nb.length];
+  return 1 - distance / maxLen;
+}
+
 function buildIDF(allTokenSets: string[][]): Map<string, number> {
   const n = allTokenSets.length;
   const df = new Map<string, number>();
@@ -219,8 +261,16 @@ function scoreAllPairs(users: UserRow[]): PairScore[] {
         users[j].current_intent || ''
       );
 
+      // Check if same company (>= 70% similarity)
+      const compSim = companySimilarity(
+        users[i].company || '',
+        users[j].company || ''
+      );
+      const isSameCompany = compSim >= 0.70;
+
       // Weighted: complementarity matters more than domain overlap
-      const score = domainScore * 0.30 + compScore * 0.70;
+      // Same company gets negative score to prevent matching
+      const score = isSameCompany ? -999 : domainScore * 0.30 + compScore * 0.70;
 
       pairs.push({
         u1: users[i].id,
@@ -267,12 +317,14 @@ function findPerfectMatching(
   const rest = userIds.slice(1);
 
   // Try partners sorted by score descending (best matches first)
+  // Exclude same-company pairs (score < 0)
   const partners = rest
     .filter(id => !usedPairs.has(pairKey(first, id)))
     .map(id => {
       const ps = pairScores.find(p => pairKey(p.u1, p.u2) === pairKey(first, id));
       return { id, score: ps?.score || 0.05 };
     })
+    .filter(p => p.score >= 0) // Skip same-company pairs
     .sort((a, b) => b.score - a.score);
 
   for (const partner of partners) {
@@ -309,8 +361,9 @@ function matchEven(
   const matched = new Set<string>();
   const matches: MatchResult[] = [];
 
-  // Pass 1: unused pairs by score
+  // Pass 1: unused pairs by score (skip same-company pairs with score < 0)
   for (const pair of pairScores) {
+    if (pair.score < 0) continue; // Skip same-company pairs
     if (!userIdSet.has(pair.u1) || !userIdSet.has(pair.u2)) continue;
     if (usedPairs.has(pairKey(pair.u1, pair.u2))) continue;
     if (matched.has(pair.u1) || matched.has(pair.u2)) continue;
@@ -319,7 +372,7 @@ function matchEven(
     matched.add(pair.u2);
   }
 
-  // Pass 2: force-pair remaining
+  // Pass 2: force-pair remaining (may include same-company if no other option)
   const remaining = users.filter(u => !matched.has(u.id));
   for (let i = 0; i + 1 < remaining.length; i += 2) {
     const key = pairKey(remaining[i].id, remaining[i + 1].id);
