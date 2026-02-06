@@ -15,6 +15,9 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "AI Match",
   },
+  verification: {
+    google: "JH8vkBwk9ascSkaSDuhJZ1aS99Yxx40xz_V7atpOJJg",
+  },
 };
 
 export default function RootLayout({
