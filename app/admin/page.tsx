@@ -25,6 +25,7 @@ export default function AdminPage() {
   const [sel, setSel] = useState<Event | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const isUpdatingRef = useRef(false);
   const [newName, setNewName] = useState('');
   const [newDate, setNewDate] = useState('');
   const [newDuration, setNewDuration] = useState(360);
@@ -82,7 +83,7 @@ export default function AdminPage() {
     if (!sel || !authToken) return;
     loadUsers(sel.id);
     loadMatches(sel.id);
-    const iv = setInterval(() => { loadUsers(sel.id); loadMatches(sel.id); }, 5000);
+    const iv = setInterval(() => { if (!isUpdatingRef.current) { loadUsers(sel.id); loadMatches(sel.id); } }, 5000);
     return () => clearInterval(iv);
   }, [sel?.id, authToken]);
 
@@ -628,24 +629,46 @@ export default function AdminPage() {
                   {users.length > 0 && (
                     <>
                       <button onClick={async () => {
+                        isUpdatingRef.current = true;
                         const ids = users.map(u => u.id);
-                        await fetch('/api/admin/users/bulk-checkin', {
-                          method: 'POST',
-                          headers: apiHeaders(),
-                          body: JSON.stringify({ userIds: ids, checked_in: true }),
-                        });
-                        if (sel) loadUsers(sel.id);
-                        flash('Tümü burada olarak işaretlendi.', 'ok');
+                        try {
+                          const res = await fetch('/api/admin/users/bulk-checkin', {
+                            method: 'POST',
+                            headers: apiHeaders(),
+                            body: JSON.stringify({ userIds: ids, checked_in: true }),
+                          });
+                          if (res.ok) {
+                            setUsers(prev => prev.map(u => ({ ...u, checked_in: true })));
+                            flash('Tümü burada olarak işaretlendi.', 'ok');
+                          } else {
+                            flash('Hata oluştu!', 'error');
+                          }
+                        } catch (e) {
+                          flash('Hata oluştu!', 'error');
+                        } finally {
+                          isUpdatingRef.current = false;
+                        }
                       }} style={{ ...btnSmall, background: '#dcfce7', color: '#166534' }}>Hepsini İşaretle</button>
                       <button onClick={async () => {
+                        isUpdatingRef.current = true;
                         const ids = users.map(u => u.id);
-                        await fetch('/api/admin/users/bulk-checkin', {
-                          method: 'POST',
-                          headers: apiHeaders(),
-                          body: JSON.stringify({ userIds: ids, checked_in: false }),
-                        });
-                        if (sel) loadUsers(sel.id);
-                        flash('Tüm işaretler kaldırıldı.', 'ok');
+                        try {
+                          const res = await fetch('/api/admin/users/bulk-checkin', {
+                            method: 'POST',
+                            headers: apiHeaders(),
+                            body: JSON.stringify({ userIds: ids, checked_in: false }),
+                          });
+                          if (res.ok) {
+                            setUsers(prev => prev.map(u => ({ ...u, checked_in: false })));
+                            flash('Tüm işaretler kaldırıldı.', 'ok');
+                          } else {
+                            flash('Hata oluştu!', 'error');
+                          }
+                        } catch (e) {
+                          flash('Hata oluştu!', 'error');
+                        } finally {
+                          isUpdatingRef.current = false;
+                        }
                       }} style={{ ...btnSmall, background: '#fee2e2', color: '#991b1b' }}>Hepsini Kaldır</button>
                     </>
                   )}
@@ -668,13 +691,23 @@ export default function AdminPage() {
                             type="checkbox"
                             checked={!!p.checked_in}
                             onChange={async () => {
+                              isUpdatingRef.current = true;
                               const newVal = !p.checked_in;
-                              await fetch(`/api/admin/users/${p.id}/checkin`, {
-                                method: 'PUT',
-                                headers: apiHeaders(),
-                                body: JSON.stringify({ checked_in: newVal }),
-                              });
                               setUsers(prev => prev.map(u => u.id === p.id ? { ...u, checked_in: newVal } : u));
+                              try {
+                                const res = await fetch(`/api/admin/users/${p.id}/checkin`, {
+                                  method: 'PUT',
+                                  headers: apiHeaders(),
+                                  body: JSON.stringify({ checked_in: newVal }),
+                                });
+                                if (!res.ok) {
+                                  setUsers(prev => prev.map(u => u.id === p.id ? { ...u, checked_in: !newVal } : u));
+                                }
+                              } catch {
+                                setUsers(prev => prev.map(u => u.id === p.id ? { ...u, checked_in: !newVal } : u));
+                              } finally {
+                                isUpdatingRef.current = false;
+                              }
                             }}
                             style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#10b981' }}
                           />
