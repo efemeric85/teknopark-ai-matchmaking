@@ -19,7 +19,7 @@ export async function GET() {
     if (error) throw error;
     return NextResponse.json({ events: data || [] });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message, events: [] }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatasi.', events: [] }, { status: 500 });
   }
 }
 
@@ -47,6 +47,6 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
     return NextResponse.json({ event: data });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatasi.' }, { status: 500 });
   }
 }

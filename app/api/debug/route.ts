@@ -41,6 +41,6 @@ export async function GET(request: NextRequest) {
       matches: matches?.map(m => ({ id: m.id, event_id: m.event_id, user1: m.user1_id, user2: m.user2_id, round: m.round_number, status: m.status, started_at: m.started_at })),
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatasi.' }, { status: 500 });
   }
 }

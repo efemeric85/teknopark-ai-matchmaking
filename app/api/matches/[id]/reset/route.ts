@@ -42,7 +42,7 @@ export async function POST(
   } catch (error: any) {
     console.error('Match reset error:', error);
     return NextResponse.json(
-      { error: error.message || 'Bir hata oluştu' },
+      { error: 'Sunucu hatasi.' || 'Bir hata oluştu' },
       { status: 500 }
     );
   }

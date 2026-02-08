@@ -142,7 +142,7 @@ export async function POST(
   } catch (error: any) {
     console.error('Handshake error:', error);
     return NextResponse.json(
-      { error: error.message || 'Handshake sırasında bir hata oluştu' },
+      { error: 'Sunucu hatasi.' || 'Handshake sırasında bir hata oluştu' },
       { status: 500 }
     );
   }

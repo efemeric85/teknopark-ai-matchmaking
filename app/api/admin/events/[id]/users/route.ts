@@ -34,6 +34,6 @@ export async function GET(
     response.headers.set('Surrogate-Control', 'no-store');
     return response;
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatasi.' }, { status: 500 });
   }
 }

@@ -42,6 +42,6 @@ export async function POST(
     return NextResponse.json({ success: true, match: updated });
   } catch (error: any) {
     console.error('Match start error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatasi.' }, { status: 500 });
   }
 }

@@ -37,6 +37,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ user });
   } catch (error: any) {
     console.error('Error logging in:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatasi.' }, { status: 500 });
   }
 }

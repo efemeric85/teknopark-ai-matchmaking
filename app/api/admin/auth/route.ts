@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     const token = await generateToken(creds.email, creds.password);
     return NextResponse.json({ success: true, token });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || 'Hata' }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatasi.' || 'Hata' }, { status: 500 });
   }
 }
 

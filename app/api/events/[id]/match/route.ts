@@ -584,7 +584,7 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('[MATCH-V9] Error:', error);
-    return NextResponse.json({ error: error.message || 'Eşleştirme hatası.' }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatasi.' || 'Eşleştirme hatası.' }, { status: 500 });
   }
 }
 
@@ -612,6 +612,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: 'Tüm eşleşmeler sıfırlandı.' });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatasi.' }, { status: 500 });
   }
 }

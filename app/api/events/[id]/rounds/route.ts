@@ -39,7 +39,7 @@ export async function GET(
       allCompleted
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatasi.' }, { status: 500 });
   }
 }
 
@@ -136,6 +136,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error('Next round error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatasi.' }, { status: 500 });
   }
 }

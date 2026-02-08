@@ -64,6 +64,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ user: data, redirect: `/meeting/${encodeURIComponent(cleanEmail)}` });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Kayıt hatası.' }, { status: 500 });
+    return NextResponse.json({ error: 'Sunucu hatasi.' || 'Kayıt hatası.' }, { status: 500 });
   }
 }

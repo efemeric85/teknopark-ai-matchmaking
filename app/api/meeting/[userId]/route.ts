@@ -262,6 +262,6 @@ export async function GET(
 
   } catch (error: any) {
     console.error('[V16] Error:', error);
-    return respond({ v: 'V16', error: error.message });
+    return respond({ v: 'V16', error: 'Sunucu hatasi.' });
   }
 }
