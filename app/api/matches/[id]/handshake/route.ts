@@ -47,13 +47,13 @@ export async function POST(
     }
 
     // Step 2: Determine which side is doing handshake
-    const isUserA = user_id === match.user_a_id;
-    const isUserB = user_id === match.user_b_id;
+    const isUserA = user_id === match.user1_id;
+    const isUserB = user_id === match.user2_id;
 
     console.log('Handshake check:', { 
       user_id, 
-      user_a_id: match.user_a_id, 
-      user_b_id: match.user_b_id,
+      user1_id: match.user1_id, 
+      user2_id: match.user2_id,
       isUserA, 
       isUserB 
     });
