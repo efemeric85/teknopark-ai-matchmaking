@@ -52,7 +52,7 @@ export async function GET(
 
     // Filter matches for this user
     const matchesData = (allMatches || []).filter(match => 
-      match.user_a_id === userId || match.user_b_id === userId
+      match.user1_id === userId || match.user2_id === userId
     );
 
     // Check if there are any matches in user's event (to know if matching started)
@@ -75,13 +75,13 @@ export async function GET(
       const { data: userA } = await supabase
         .from('users')
         .select('id, full_name, company, position, current_intent')
-        .eq('id', match.user_a_id)
+        .eq('id', match.user1_id)
         .single();
 
       const { data: userB } = await supabase
         .from('users')
         .select('id, full_name, company, position, current_intent')
-        .eq('id', match.user_b_id)
+        .eq('id', match.user2_id)
         .single();
 
       const { data: event } = await supabase
@@ -90,7 +90,7 @@ export async function GET(
         .eq('id', match.event_id)
         .single();
 
-      const isUserA = match.user_a_id === userId;
+      const isUserA = match.user1_id === userId;
       const partner = isUserA ? userB : userA;
       const myHandshake = isUserA ? match.handshake_a : match.handshake_b;
       const partnerHandshake = isUserA ? match.handshake_b : match.handshake_a;
