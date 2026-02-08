@@ -21,11 +21,11 @@ export async function POST(
     const { data: match, error: matchError } = await supabase
       .from('matches')
       .select('*')
-      .eq('id', matchId)
+      .eq('id')
       .maybeSingle();    if (matchError) {
       console.error('Match query error:', matchError);
       return NextResponse.json(
-        { error: `Veritabanı hatası: ${matchError.message}`, matchId },
+        { error: 'Sunucu hatasi.' },
         { status: 500 }
       );
     }
@@ -33,7 +33,7 @@ export async function POST(
     if (!match) {
       console.error('Match not found:', { matchId });
       return NextResponse.json(
-        { error: `Eşleşme bulunamadı (ID: ${matchId?.slice(0,8)}...)`, matchId },
+        { error: `Eşleşme bulunamadı (ID: ${matchId?.slice(0,8)}...)` },
         { status: 404 }
       );
     }
@@ -61,7 +61,7 @@ export async function POST(
     const { data: updateData, error: updateError } = await supabase
       .from('matches')
       .update({ [updateField]: true })
-      .eq('id', matchId)
+      .eq('id')
       .select();    if (updateError) {
       console.error('Handshake update error:', updateError);
       throw updateError;
@@ -71,7 +71,7 @@ export async function POST(
     const { data: updatedMatch, error: refetchError } = await supabase
       .from('matches')
       .select('*')
-      .eq('id', matchId)
+      .eq('id')
       .single();
 
     if (refetchError || !updatedMatch) {
@@ -94,7 +94,7 @@ export async function POST(
           status: 'active',
           started_at: startedAt
         })
-        .eq('id', matchId);
+        .eq('id');
 
       if (activateError) {
         console.error('Match activation error:', activateError);
@@ -105,7 +105,7 @@ export async function POST(
       const { data: activatedMatch } = await supabase
         .from('matches')
         .select('*')
-        .eq('id', matchId)
+        .eq('id')
         .single();
 
       if (activatedMatch) {

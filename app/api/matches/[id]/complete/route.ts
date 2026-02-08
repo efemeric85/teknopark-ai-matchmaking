@@ -15,7 +15,7 @@ export async function POST(
 
     const { data: match } = await supabase
       .from('matches').select('status')
-      .eq('id', matchId).single();
+      .eq('id').single();
 
     if (match?.status === 'completed') {
       return NextResponse.json({ success: true });
@@ -24,7 +24,7 @@ export async function POST(
     const { error } = await supabase
       .from('matches')
       .update({ status: 'completed' })
-      .eq('id', matchId);
+      .eq('id');
 
     if (error) throw error;
 

@@ -16,7 +16,7 @@ export async function POST(
         status: 'pending',
         started_at: null
       })
-      .eq('id', matchId);
+      .eq('id');
 
     if (error) {
       console.error('Update error:', error);
@@ -27,7 +27,7 @@ export async function POST(
     const { data: updatedMatch, error: fetchError } = await supabase
       .from('matches')
       .select('*')
-      .eq('id', matchId)
+      .eq('id')
       .maybeSingle();
 
     if (fetchError) {

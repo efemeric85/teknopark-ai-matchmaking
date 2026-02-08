@@ -15,7 +15,7 @@ export async function POST(
 
     const { data: match, error } = await supabase
       .from('matches').select('*')
-      .eq('id', matchId).single();
+      .eq('id').single();
 
     if (error || !match) {
       return NextResponse.json({ error: 'Eşleşme bulunamadı' }, { status: 404 });
@@ -33,7 +33,7 @@ export async function POST(
     const { data: updated, error: updateError } = await supabase
       .from('matches')
       .update({ status: 'active', started_at: now })
-      .eq('id', matchId)
+      .eq('id')
       .select()
       .single();
 
