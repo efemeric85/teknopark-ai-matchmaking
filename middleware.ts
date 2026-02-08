@@ -12,6 +12,7 @@ export async function middleware(request: NextRequest) {
   if (path.startsWith('/api/users')) return NextResponse.next();
   if (path.startsWith('/api/meeting')) return NextResponse.next();
   if (path.startsWith('/api/admin/auth')) return NextResponse.next();
+  if (path.startsWith('/api/matches') && !path.includes('/reset')) return NextResponse.next();
 
   // ═══ /api/admin/* ROUTE'LARI HER ZAMAN TOKEN GEREKTİRİR (GET dahil) ═══
   if (path.startsWith('/api/admin/')) {

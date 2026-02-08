@@ -6,19 +6,11 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const supabase = createServerClient();
-    
-    console.log('GET Match API - looking for:', params.id);
-    
-    const { data: match, error } = await supabase
+    const supabase = createServerClient();    const { data: match, error } = await supabase
       .from('matches')
       .select('*')
       .eq('id', params.id)
-      .maybeSingle();
-
-    console.log('GET Match API result:', { found: !!match, error: error?.message });
-
-    if (error) throw error;
+      .maybeSingle();    if (error) throw error;
 
     return NextResponse.json({ match });
   } catch (error: any) {

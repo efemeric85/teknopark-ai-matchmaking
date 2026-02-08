@@ -8,11 +8,7 @@ export async function POST(
 ) {
   try {
     const supabase = createServerClient();
-    const matchId = params.id;
-
-    console.log('Resetting match:', matchId);
-
-    const { error } = await supabase
+    const matchId = params.id;    const { error } = await supabase
       .from('matches')
       .update({ 
         handshake_a: false,

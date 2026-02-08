@@ -17,20 +17,12 @@ export async function POST(
       );
     }
 
-    const supabase = createServerClient();
-
-    console.log('Handshake API called:', { matchId, user_id });
-
-    // Step 1: Get current match state
+    const supabase = createServerClient();    // Step 1: Get current match state
     const { data: match, error: matchError } = await supabase
       .from('matches')
       .select('*')
       .eq('id', matchId)
-      .maybeSingle();
-
-    console.log('Match lookup result:', { matchFound: !!match, matchId: match?.id, error: matchError?.message });
-
-    if (matchError) {
+      .maybeSingle();    if (matchError) {
       console.error('Match query error:', matchError);
       return NextResponse.json(
         { error: `Veritabanı hatası: ${matchError.message}`, matchId },
@@ -65,19 +57,12 @@ export async function POST(
       );
     }
 
-    const updateField = isUserA ? 'handshake_a' : 'handshake_b';
-    console.log('Will update field:', updateField);
-
-    // Step 3: Update the handshake field
+    const updateField = isUserA ? 'handshake_a' : 'handshake_b';    // Step 3: Update the handshake field
     const { data: updateData, error: updateError } = await supabase
       .from('matches')
       .update({ [updateField]: true })
       .eq('id', matchId)
-      .select();
-
-    console.log('Update result:', { updateData, updateError });
-    
-    if (updateError) {
+      .select();    if (updateError) {
       console.error('Handshake update error:', updateError);
       throw updateError;
     }
